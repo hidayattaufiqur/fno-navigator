@@ -521,7 +521,6 @@
   </slot>
 {:else}
   <div
-    bind:this={container}
     class="fg3d-container"
     style="height:{height}px; width:100%;"
     role="img"
@@ -529,6 +528,7 @@
     data-testid="sigma"
   >
     <Starfield />
+    <div class="fg3d-mount" bind:this={container}></div>
     {#if phase === 'loading'}
       <div class="mini loading-mini" aria-busy="true">
         <span class="spin-dot" aria-hidden="true"></span>
@@ -563,7 +563,12 @@
     cursor: grab;
   }
   .fg3d-container:active { cursor: grabbing; }
-  .fg3d-container :global(canvas) {
+  .fg3d-mount {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+  }
+  .fg3d-mount :global(canvas) {
     position: absolute;
     inset: 0;
     z-index: 2;
