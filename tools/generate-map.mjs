@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Reproducible fk-map.json generator + provenance manifest (fno-interactor).
+// Reproducible fk-map.json generator + provenance manifest (fno-navigator).
 //
 // WHAT IT DOES
 //   Rebuilds static/data/fk-map.json and static/data/map-manifest.json from the
@@ -276,7 +276,7 @@ function generate(dir, outDir) {
 
   const mapText = JSON.stringify(forward) // compact, no trailing newline (matches committed format)
   const manifest = {
-    schema: 'fno-interactor/fk-map-manifest/v1',
+    schema: 'fno-navigator/fk-map-manifest/v1',
     generator: { script: 'tools/generate-map.mjs', version: SCRIPT_VERSION },
     generatedAt: git.gitCommitDate ?? new Date(statSync(join(dir, 'tablefieldassociations.json')).mtime).toISOString(),
     sourceDataset,

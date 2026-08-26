@@ -68,7 +68,7 @@
 </script>
 
 <svelte:head>
-  <title>Table Reference · D365FO Navigator</title>
+  <title>Table Reference · FnO Navigator</title>
 </svelte:head>
 
 <header class="hero">

@@ -14,12 +14,12 @@
 </script>
 
 <svelte:head>
-  <title>D365FO Process Navigator</title>
+  <title>FnO Navigator</title>
 </svelte:head>
 
 <header class="home-hero">
   <p class="eyebrow">Dynamics 365 Finance &amp; Operations</p>
-  <h2>Process Navigator</h2>
+  <h2>FnO Navigator</h2>
   <p class="lede">
     Understand business processes, trace table relations, and navigate technical customisations —
     without diving into the AOT blind.

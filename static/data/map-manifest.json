@@ -1,5 +1,5 @@
 {
-  "schema": "fno-interactor/fk-map-manifest/v1",
+  "schema": "fno-navigator/fk-map-manifest/v1",
   "generator": {
     "script": "tools/generate-map.mjs",
     "version": "1.0.0"
