@@ -4,12 +4,17 @@
 // exist in the dataset (replaces, removes, and remove entries) must be found.
 // Also checks add entries for pre-existing duplicates (already_present).
 //
-// Usage: node scripts/analyze-patch-manifest.mjs  (run from repo root)
+// Usage: node scripts/analyze-patch-manifest.mjs [--only <section>]  (run from repo root)
+// --only <section>: scope checks to one section (for incremental cards whose
+// earlier sections were already applied to the dataset).
 
 import { readFileSync } from 'node:fs'
 
 const MANIFEST = '/home/smolpanda/Fun/Projects/fno-dev-copilot-spike/data/patch-manifest.json'
 const DATASET = '/home/smolpanda/Fun/Projects/MicrosoftDynamicsTableAssociations/tablefieldassociations.json'
+
+const onlyArg = process.argv.indexOf('--only')
+const ONLY = onlyArg >= 0 ? process.argv[onlyArg + 1] : null
 
 const m = JSON.parse(readFileSync(MANIFEST, 'utf8'))
 const dataset = JSON.parse(readFileSync(DATASET, 'utf8'))
@@ -35,14 +40,24 @@ const checkTarget = (label, target) => {
 }
 
 // --- tax_case.adds: pure new entries, must NOT already exist (they'd be dup adds)
-const taxAdds = m.sections.tax_case.adds
+const taxAdds = ONLY && ONLY !== 'tax_case' ? [] : m.sections.tax_case.adds
 for (const a of taxAdds) {
   const hits = idx.get(key(a.entry)) ?? []
   if (hits.length > 0) dupAdds.push({ label: 'tax_case.adds', entry: a.entry, existing: hits.map((i) => dataset[i]) })
 }
 
+// --- non_tax_gaps.adds: pure new entries, must NOT already exist (dup-add check)
+const nonTaxAdds = ONLY && ONLY !== 'non_tax_gaps' ? [] : (m.sections.non_tax_gaps?.adds ?? [])
+for (const a of nonTaxAdds) {
+  if (!a.entry?.ParentTableName) { missing.push({ label: 'non_tax_gaps.adds.missingEntry', a }); continue }
+  const hits = idx.get(key(a.entry)) ?? []
+  if (hits.length > 0) dupAdds.push({ label: 'non_tax_gaps.adds', entry: a.entry, existing: hits.map((i) => dataset[i]) })
+}
+
 // --- suspect_verdict.actions
-const acts = m.sections.suspect_verdict.actions
+const acts = ONLY && ONLY !== 'suspect_verdict'
+  ? { add_corrected: [], promote_verified: [], remove: [] }
+  : m.sections.suspect_verdict.actions
 
 // add_corrected: carries `replaces` (the dataset entry it fixes). The corrected
 // entry itself must NOT already exist (otherwise it's a no-op, not a fix).

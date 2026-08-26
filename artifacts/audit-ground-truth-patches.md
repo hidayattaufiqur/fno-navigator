@@ -103,7 +103,7 @@ Note: the 419 addressed entries are the mirror-grounded subset. The full 7,067 p
 
 ## License boundary
 
-Nothing mirror-derived landed in the public repo. Only the applied dataset edits (public-shaped facts, each mirror-traced with source section) changed tablefieldassociations.json; the map is regenerated purely from that public dataset by the checked-in generator. Files changed:
+Nothing mirror-derived landed in the public repo. Only the applied dataset edits (public-shaped facts, each mirror-traced with source section) changed tablefieldassociations.json; the map is regenerated purely from that public dataset by the checked-in generator. The aggregate counts in this document describe our internal verification process only; no Licensed Application/mirror data or content is reproduced. Files changed:
 - MicrosoftDynamicsTableAssociations/tablefieldassociations.json (2 commits)
 - fno-interactor/static/data/fk-map.json + map-manifest.json (2 commits)
 - fno-interactor/scripts/{analyze,apply,audit-map-diff}-patch-manifest.mjs (tooling, 1 commit)

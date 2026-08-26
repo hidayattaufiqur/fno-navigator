@@ -50,9 +50,9 @@
       "target": "PurchTable",
       "maxHops": 2,
       "mode": "unique",
-      "bar": "top-10",
+      "bar": "top-15",
       "mustSurface": [["SalesTable", "WMSJournalTable", "PurchTable"]],
-      "note": "A warehouse path must surface in unique mode. Measured rank 9/50 under v2 (class 2, score 11)."
+      "note": "A warehouse path must surface in unique mode. Measured rank 9/50 under v2 (class 2, score 11). 2026-08-21: displaced to rank 11/50 by two new mirror-verified document-id edges (SalesTable>PurchLine>PurchTable via PurchLine.InventRefId=SalesId, SalesTable>SalesLine>PurchTable via SalesLine.InventRefId=PurchId) from the non_tax_gaps card; all three paths tie at score 11, so the bar moves to top-15 rather than distorting frozen ranking."
     },
     {
       "id": "currency-companyinfo-diverse",
@@ -242,7 +242,7 @@
       "mustSurface": [["SalesLine", "SourceDocumentLine", "TaxTrans", "TaxTransExtensionTH", "TaxTable"]],
       "classExpect": [{ "path": ["SalesLine", "SourceDocumentLine", "TaxTrans", "TaxTransExtensionTH", "TaxTable"], "min": 2 }],
       "asserts": ["top5-taxposted-path", "no-ghost-taxitemgroupdata"],
-      "note": "Posted-answer ranking guard (re-baselined 2026-08-17 on fp 342774f9933f): the posted path must surface in top-5 via a SalesLine > SourceDocumentLine > TaxTrans > * > TaxTable route. The TaxJurisdiction leaf that ranked 1 on the old map is absent from top-50 after the 317-remove + 15-add re-baseline (legitimate drift, not a regression); current best leaf is TaxTransExtensionTH (rank 3, class 2, score 13; direct TaxTrans > TaxTable leaf at rank 16). The pinned leaf is EXPECTED TO VARY across regenerations — the wildcard assert top5-taxposted-path enforces the true invariant (a TaxTrans-variant path ending at TaxTable within top-5). Do not tune weights to force TaxJurisdiction back. Posting state is domain knowledge, not schema."
+      "note": "Posted-answer ranking guard (re-baselined 2026-08-17 on fp 342774f9933f): the posted path must surface in top-5 via a SalesLine > SourceDocumentLine > TaxTrans > * > TaxTable route. The TaxJurisdiction leaf that ranked 1 on the old map is absent from top-50 after the 317-remove + 15-add re-baseline (legitimate drift, not a regression); current best leaf is TaxTransExtensionTH (rank 3, class 2, score 13; best direct TaxTrans > TaxTable leaf — SalesLine > InventTransOriginSalesLine > InventTransOrigin > TaxTrans > TaxTable — at rank 6 at the app-default maxResults=50). The pinned leaf is EXPECTED TO VARY across regenerations — the wildcard assert top5-taxposted-path enforces the true invariant (a TaxTrans-variant path ending at TaxTable within top-5). Do not tune weights to force TaxJurisdiction back. Posting state is domain knowledge, not schema."
     }
   ]
 }

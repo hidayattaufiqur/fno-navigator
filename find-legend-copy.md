@@ -96,4 +96,4 @@ Each reason chip names one piece of evidence behind the path's class or score, w
 
 #### Known canonical path
 
-A `Known canonical path` is a verified chain pinned from the fixture set for this table pair. It is shown as curated knowledge and is not ranked by the search algorithm.
+A `Known canonical path` is a verified chain pinned from the fixture set for this table pair. It is shown as curated knowledge and is not ranked by the search algorithm. Semantically required legs may rank outside the top results by design when they route through shared hubs such as `TaxGroupHeading`. If an expected leg is missing from the ranked rows, check the pinned `Known canonical path` entries for the pair.

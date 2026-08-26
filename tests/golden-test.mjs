@@ -1,5 +1,5 @@
 // JS golden test (Q5/Q11 parity): runs the golden pairs and compares the
-// top-20 table sequences, scores (6 decimals), qualityClass and reason codes
+// top-50 table sequences, scores (6 decimals), qualityClass and reason codes
 // against tests/golden-results.json, which is the cross-language contract —
 // the Python suite (fno-dev-copilot-spike/server/tests/golden_test.py)
 // asserts the same file against the Python implementation, so JS ≡ Python
@@ -22,7 +22,7 @@ const generated = { version: 2, generatedBy: 'tests/golden-test.mjs', pairs: [] 
 for (const p of PAIRS.pairs) {
   const res = findPaths(p.source, p.target, p.maxHops, {
     sort: p.sort ?? 'unique',
-    maxResults: p.maxResults ?? 20,
+    maxResults: p.maxResults ?? 50,
   })
   generated.pairs.push({
     ...p,

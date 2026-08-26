@@ -8,6 +8,22 @@
   import { specificityLoadState, specificityLoadError, loadSpecificity } from '$lib/stores/specificity'
   import { findPaths } from '$lib/pathfinder'
   import { TOOLTIP_COPY, REASON_TOOLTIP_COPY, LEGEND_GROUPS } from '$lib/findLegendCopy'
+  import { goto } from '$app/navigation'
+  // ── M2 graph pane (TDD §4.1) ─────────────────────────────────────────────
+  import SigmaGraph from '$lib/components/SigmaGraph.svelte'
+  import { selectSlice, mergeStructuredEdges } from '$lib/graph/selectSlice'
+  import { getForwardMap, getReverseMap } from '$lib/stores/fkMap'
+  import { getSpecificityMap } from '$lib/stores/specificity'
+  import {
+    graphState,
+    CANONICAL_MODULES,
+    requestExpand,
+    setShowPlumbing,
+    toggleModule,
+    setAllModules,
+    hydrateFromParams,
+    toGraphParams,
+  } from '$lib/stores/graphState'
 
   // ── Bind store fields to local vars for template convenience ───────────────
 
@@ -46,7 +62,175 @@
       targetTable = to
       targetInput = to
     }
+    // M2: graph flag + URL hydration (Q12/Q15). ?graph=1 wins over localStorage
+    // and persists opt-in; absent param defers to stored preference.
+    const sp = new URLSearchParams(location.search)
+    if (sp.has('graph')) {
+      try { localStorage.setItem('graphEnabled', sp.get('graph') === '1' ? '1' : '0') } catch {}
+    }
+    graphOn = resolveGraphFlag()
+    replayQueue = hydrateFromParams(sp)
   })
+
+  // ── Graph pane state (M2) ─────────────────────────────────────────────────
+
+  let sigmaApi = null
+  let graphOn = false
+  let popTable = null
+  let popPos = { x: 0, y: 0 }
+  let liveNodes = new Set()
+  let replayQueue = []
+  let replaying = false
+
+  function resolveGraphFlag() {
+    const sp = new URLSearchParams(location.search)
+    if (sp.has('graph')) return sp.get('graph') === '1'
+    try { return localStorage.getItem('graphEnabled') === '1' } catch { return false }
+  }
+
+  // Initial slice + seed metadata for the trace view (rarest-first, Q4).
+  $: slice =
+    searchState === 'done' && pathResults.length > 0
+      ? selectSlice(pathResults, { cap: 40, specMap: getSpecificityMap() })
+      : null
+  $: if (slice) liveNodes = new Set(slice.nodes)
+
+  $: metaMap = buildMeta(pathResults)
+  function buildMeta(results) {
+    const m = {}
+    results.forEach((r, pi) => r.steps.forEach((s, si) => { if (!(s.table in m)) m[s.table] = { hop: si, pathIdx: pi } }))
+    return m
+  }
+
+  $: graphStateSnap = $graphState
+  $: modCounts = countModules(slice?.nodes ?? [])
+  function countModules(tables) {
+    const counts = {}
+    for (const t of tables) {
+      const m = canonicalModule(tableDefs[t]?.module)
+      counts[m ?? 'Unknown'] = (counts[m ?? 'Unknown'] ?? 0) + 1
+    }
+    return counts
+  }
+
+  // ── URL loop: replaceState only, never pushState (Q12). Pager stays out. ──
+  function syncGraphUrl() {
+    const sp = new URLSearchParams(location.search)
+    if (!graphOn) {
+      ;['graph', 'expand', 'modules'].forEach((k) => sp.delete(k))
+      history.replaceState(null, '', `${location.pathname}?${sp.toString()}`)
+      return
+    }
+    sp.set('graph', '1')
+    const snap = graphStateSnap
+    const ex = [...snap.expandedSet]
+    ex.length ? sp.set('expand', ex.join(',')) : sp.delete('expand')
+    const mods = snap.visibleModules
+    mods.length && mods.length < CANONICAL_MODULES.length ? sp.set('modules', mods.join(',')) : sp.delete('modules')
+    history.replaceState(null, '', `${location.pathname}?${sp.toString()}`)
+  }
+
+  function enableGraph() {
+    try { localStorage.setItem('graphEnabled', '1') } catch {}
+    graphOn = true
+    syncGraphUrl()
+  }
+  function disableGraph() {
+    graphOn = false
+    popTable = null
+    try { localStorage.setItem('graphEnabled', '0') } catch {}
+    syncGraphUrl()
+  }
+  function toggleMod(m) {
+    toggleModule(m)
+    syncGraphUrl()
+  }
+  function setPlumbing(e) {
+    setShowPlumbing(e.currentTarget.checked) // deliberately NOT in URL (Q11/Q12 lock)
+  }
+
+  // ── Node pop: Goto / Expand(+N) ───────────────────────────────────────────
+  function openPop(table) {
+    popTable = table
+    popPos = sigmaApi?.nodeDisplayPos(table) ?? { x: 40, y: 40 }
+  }
+  function closePop() {
+    popTable = null
+  }
+  function gotoTable(t) {
+    closePop()
+    goto(`/tables/${t}?graph=1`)
+  }
+
+  /** Structured FK edges touching t, both directions (child→t and t→parent). */
+  function structuredNeighbours(t) {
+    const out = []
+    for (const [child, pf, cf] of getForwardMap()?.[t] ?? []) out.push({ from: child, to: t, fromField: cf, toField: pf })
+    for (const [p, pf, cf] of getReverseMap()?.[t] ?? []) out.push({ from: t, to: p, fromField: cf, toField: pf })
+    return out
+  }
+
+  function pendingCount(t) {
+    const seen = new Set(liveNodes)
+    let n = 0
+    for (const e of structuredNeighbours(t)) {
+      const other = e.from === t ? e.to : e.from
+      if (!seen.has(other)) n += 1
+    }
+    return n
+  }
+
+  function doExpand() {
+    const t = popTable
+    if (!t || !sigmaApi) return closePop()
+    const cands = [...new Set(structuredNeighbours(t).map((e) => (e.from === t ? e.to : e.from)))].filter(
+      (x) => !liveNodes.has(x),
+    )
+    const { accepted } = requestExpand(t, cands) // NODE_CAP enforced inside (ceiling 120)
+    if (accepted.length === 0) return closePop()
+    const acc = new Set(accepted)
+    accepted.forEach((x) => liveNodes.add(x))
+    const edges = mergeStructuredEdges(
+      structuredNeighbours(t).filter((e) => acc.has(e.from) || acc.has(e.to)),
+      getSpecificityMap(),
+    )
+    sigmaApi.addToGraph({ parentTable: t, tables: accepted, edges })
+    syncGraphUrl()
+    closePop()
+  }
+
+  /** Progressive replay of ?expand=A,B — sequential warm fans, order matters. */
+  async function replayFromUrl() {
+    if (replaying || !sigmaApi || !slice) return
+    replaying = true
+    for (const t of replayQueue) {
+      if (liveNodes.has(t) || !getForwardMap()) continue
+      const cands = [...new Set(structuredNeighbours(t).map((e) => (e.from === t ? e.to : e.from)))].filter(
+        (x) => !liveNodes.has(x),
+      )
+      const { accepted } = requestExpand(t, cands)
+      if (accepted.length) {
+        const acc = new Set(accepted)
+        accepted.forEach((x) => liveNodes.add(x))
+        const edges = mergeStructuredEdges(
+          structuredNeighbours(t).filter((e) => acc.has(e.from) || acc.has(e.to)),
+          getSpecificityMap(),
+        )
+        sigmaApi.addToGraph({ parentTable: t, tables: accepted, edges })
+        await new Promise((r) => setTimeout(r, 560)) // one warm budget per fan
+      }
+    }
+    replayQueue = []
+    replaying = false
+  }
+  $: if (sigmaApi && graphOn && slice && replayQueue.length > 0 && !replaying) replayFromUrl()
+
+  // Back/forward re-hydrates from URL — single source of truth.
+  function onPopState() {
+    const sp = new URLSearchParams(location.search)
+    graphOn = resolveGraphFlag()
+    hydrateFromParams(sp)
+  }
 
   // ── Autocomplete ───────────────────────────────────────────────────────────
 
@@ -386,6 +570,7 @@
     window.addEventListener('click', onTipClick)
     window.addEventListener('keydown', onTipKey)
     window.addEventListener('scroll', onTipScroll, true)
+    window.addEventListener('popstate', onPopState)
     return () => {
       window.removeEventListener('mouseover', onTipOver)
       window.removeEventListener('mouseout', onTipOut)
@@ -394,6 +579,7 @@
       window.removeEventListener('click', onTipClick)
       window.removeEventListener('keydown', onTipKey)
       window.removeEventListener('scroll', onTipScroll, true)
+      window.removeEventListener('popstate', onPopState)
     }
   })
 
@@ -684,6 +870,79 @@
             >curated</span>
           </div>
         {/each}
+      </div>
+    {/if}
+
+    {#if slice && graphOn}
+      <section class="graph-pane" aria-label="Interactive path graph">
+        <div class="graph-toolbar">
+          <div class="mod-pills" role="group" aria-label="Filter tables by module">
+            <button
+              class="mod-pill"
+              class:active={graphStateSnap.visibleModules.length === 0}
+              on:click={() => { setAllModules(); syncGraphUrl() }}
+            >All</button>
+            {#each CANONICAL_MODULES as m (m)}
+              {@const c = modCounts[m] ?? 0}
+              <button
+                class="mod-pill"
+                class:active={graphStateSnap.visibleModules.includes(m)}
+                class:empty={c === 0 && graphStateSnap.visibleModules.length === 0}
+                data-module={m}
+                on:click={() => toggleMod(m)}
+              ><span class="dot"></span>{m} ({c})</button>
+            {/each}
+            <button
+              class="mod-pill"
+              class:active={graphStateSnap.visibleModules.includes('Unknown')}
+              class:empty={(modCounts.Unknown ?? 0) === 0 && graphStateSnap.visibleModules.length === 0}
+              on:click={() => toggleMod('Unknown')}
+            ><span class="dot dot-unknown"></span>Unknown ({modCounts.Unknown ?? 0})</button>
+          </div>
+          <label class="plumb-toggle">
+            <input type="checkbox" checked={graphStateSnap.showPlumbing} on:change={setPlumbing} />
+            Show plumbing
+          </label>
+          <button class="hide-graph-btn" on:click={disableGraph}>Hide graph</button>
+        </div>
+        <div class="graph-wrap">
+          <SigmaGraph
+            nodes={slice.nodes}
+            edges={slice.mergedEdges}
+            meta={metaMap}
+            height={480}
+            bind:this={sigmaApi}
+            onnodeclick={openPop}
+          >
+            <div slot="fallback" class="finder-empty" style="margin:0">
+              <p>WebGL is unavailable in this browser — the interactive graph is disabled.</p>
+              <p class="mini">The ranked path list below remains fully functional.</p>
+            </div>
+          </SigmaGraph>
+          {#if popTable}
+            <div class="pop-card" style="left:{popPos.x}px; top:{popPos.y}px" role="dialog" aria-label="{popTable} actions">
+              <button class="pop-x" on:click={closePop} aria-label="Close">✕</button>
+              <strong>{popTable}</strong>
+              <span class="mini pop-mod" data-module={canonicalModule(tableDefs[popTable]?.module) ?? ''}>
+                {canonicalModule(tableDefs[popTable]?.module) ?? 'Unknown'}
+              </span>
+              <div class="pop-actions">
+                <button class="pop-goto" on:click={() => gotoTable(popTable)}>Goto →</button>
+                <button class="pop-expand" on:click={doExpand} disabled={pendingCount(popTable) === 0}>
+                  Expand (+{pendingCount(popTable)})
+                </button>
+              </div>
+            </div>
+          {/if}
+        </div>
+        <div class="graph-status mini">
+          Showing {slice.nodes.length} of the ranked-path tables{slice.overflow > 0 ? ` · ${slice.overflow} not shown` : ''}
+        </div>
+      </section>
+    {:else if slice && !graphOn}
+      <div class="show-graph-row">
+        <button class="show-graph-btn" on:click={enableGraph}>Show graph</button>
+        <span class="mini">WebGL view of the paths below</span>
       </div>
     {/if}
 
@@ -1577,4 +1836,121 @@
       grid-template-columns: 1fr;
     }
   }
+  /* ── M2 graph pane ── */
+  .graph-pane {
+    margin: 18px 0 8px;
+    border: 1px solid var(--clr-border-subtle);
+    border-radius: var(--r-lg, 8px);
+    background: var(--clr-surface);
+    overflow: hidden;
+  }
+  .graph-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--clr-border-subtle);
+  }
+  .mod-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    flex: 1;
+  }
+  .mod-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    font-size: 11.5px;
+    color: var(--clr-text-muted);
+    background: transparent;
+    border: 1px solid var(--clr-border-subtle);
+    border-radius: 999px;
+    cursor: pointer;
+    transition: border-color 0.12s, color 0.12s;
+  }
+  .mod-pill[data-module] { border-color: var(--mod-clr-border); background: var(--mod-clr-bg); }
+  .mod-pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--mod-clr, var(--clr-text-faint)); }
+  .mod-pill .dot-unknown { background: var(--clr-text-faint); }
+  .mod-pill.active { color: var(--clr-text); border-color: var(--clr-border-accent); }
+  .mod-pill.empty { opacity: 0.45; }
+  .plumb-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11.5px;
+    color: var(--clr-text-muted);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .plumb-toggle input { accent-color: var(--clr-blue); }
+  .hide-graph-btn,
+  .show-graph-btn {
+    background: none;
+    border: 1px solid var(--clr-border-subtle);
+    border-radius: var(--r-sm, 4px);
+    color: var(--clr-text-muted);
+    cursor: pointer;
+    font-size: 11.5px;
+    padding: 3px 10px;
+    white-space: nowrap;
+  }
+  .hide-graph-btn:hover, .show-graph-btn:hover { color: var(--clr-text); border-color: var(--clr-border-accent); }
+  .show-graph-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 14px 0 4px;
+  }
+  .graph-wrap { position: relative; }
+  .graph-status { padding: 6px 12px; border-top: 1px solid var(--clr-border-subtle); }
+  .pop-card {
+    position: absolute;
+    transform: translate(-50%, -130%);
+    z-index: 25;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 180px;
+    padding: 10px 12px;
+    background: var(--clr-label-bg);
+    border: 1px solid var(--clr-label-bd);
+    border-radius: var(--r-md, 6px);
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
+    pointer-events: auto;
+  }
+  .pop-card strong { font-family: inherit; font-size: 13px; color: var(--clr-text); }
+  .pop-x {
+    position: absolute;
+    top: 4px;
+    right: 6px;
+    background: none;
+    border: none;
+    color: var(--clr-text-faint);
+    cursor: pointer;
+    font-size: 11px;
+  }
+  .pop-x:hover { color: var(--clr-text); }
+  .pop-actions { display: flex; gap: 6px; margin-top: 6px; }
+  .pop-goto, .pop-expand {
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: var(--r-sm, 4px);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .pop-goto {
+    background: none;
+    border: 1px solid var(--clr-border-accent);
+    color: var(--clr-blue);
+  }
+  .pop-expand {
+    background: var(--clr-blue-strong, var(--clr-blue));
+    border: 1px solid transparent;
+    color: #fff;
+  }
+  .pop-expand:disabled { opacity: 0.4; cursor: default; }
+
 </style>

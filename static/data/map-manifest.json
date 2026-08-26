@@ -10,23 +10,23 @@
     "path": "/home/smolpanda/Fun/Projects/MicrosoftDynamicsTableAssociations",
     "gitCommitSha": "af2a7c3df2569c9a97aeed79c4d94610938bf1ba",
     "gitCommitDate": "2026-08-17T21:52:07+07:00",
-    "fileSha256": "0a254997ca5393b086ade625c9a5bded2a011c8413eccfb1929feff987b695de",
-    "entryCount": 39078,
-    "fileSize": 7528571
+    "fileSha256": "33b670264b478f28f9dfa44ce51c13f0fa269ef0aa128bc2df42ad4834a4151a",
+    "entryCount": 39113,
+    "fileSize": 7534941
   },
   "counts": {
-    "entriesTotal": 39078,
-    "cleanRelations": 32322,
-    "compositeRelations": 6696,
-    "expansionEdges": 11262,
+    "entriesTotal": 39113,
+    "cleanRelations": 32344,
+    "compositeRelations": 6701,
+    "expansionEdges": 11272,
     "dropped": {
       "markerOnlySpecs": 25,
       "unequalFieldLists": 0,
       "unparseableFields": 0,
-      "duplicateEdges": 478
+      "duplicateEdges": 486
     },
     "droppedTotal": 25,
-    "edges": 43584,
+    "edges": 43616,
     "tables": 5587,
     "childTables": 5599,
     "totalReferencedTables": 5632,
@@ -34,5 +34,5 @@
     "orphanTables": 0,
     "connectedComponents": 48
   },
-  "fingerprint": "342774f9933ffe0af68a6254a5e00e07bbfeb960f6a9145f6d70b36adfa051a6"
+  "fingerprint": "1f6dea53761d77ef0e8294223466003e9c2c9fad7f8e6e207a13250f89bd604d"
 }

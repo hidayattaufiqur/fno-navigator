@@ -5,7 +5,12 @@
   import { canonicalModule } from '$lib/utils'
   import { flows, tableDefs } from '$lib/data/flows'
   import { fkLoadState, loadFkMap, getSchemaEdgesForTable } from '$lib/stores/fkMap'
+  import { getSpecificityMap, loadSpecificity } from '$lib/stores/specificity'
   import { COMMON_METHODS, METHOD_CATEGORIES } from '$lib/data/tableMethods'
+  import SigmaGraph from '$lib/components/SigmaGraph.svelte'
+  import { mergeStructuredEdges } from '$lib/graph/selectSlice'
+  import { graphState, CANONICAL_MODULES, toggleModule, setAllModules, setShowPlumbing } from '$lib/stores/graphState'
+  import { goto } from '$app/navigation'
 
   // @type {import('./$types').PageData}
   export let data
@@ -18,18 +23,91 @@
   ])
 
   // ── Schema FK enrichment (loaded lazily, non-blocking) ─────────────────────
-  onMount(() => { loadFkMap() })
+  onMount(() => { loadFkMap(); loadSpecificity() })
 
+  // SVG (List tab) keeps the 24-neighbour orbit contract; Sigma (Graph tab)
+  // uses the Q4 40 cap. Both filtered to known tables.
   $: schemaEdges = $fkLoadState === 'ready'
     ? getSchemaEdgesForTable(data.name, knownTables, 24)
+    : []
+  $: sigmaSchemaEdges = $fkLoadState === 'ready'
+    ? getSchemaEdgesForTable(data.name, knownTables, 40)
     : []
 
   // Remove schema edges that duplicate a hand-written relation (same from+to pair)
   $: manualEdgePairs = new Set(data.relationsUsing.map((r) => `${r.from}|${r.to}`))
   $: dedupedSchemaEdges = schemaEdges.filter((e) => !manualEdgePairs.has(`${e.from}|${e.to}`))
+  $: dedupedSigmaSchemaEdges = sigmaSchemaEdges.filter((e) => !manualEdgePairs.has(`${e.from}|${e.to}`))
 
   // Combined edges for the graph
   $: allEdges = [...data.relationsUsing, ...dedupedSchemaEdges]
+  $: allSigmaEdges = [...data.relationsUsing, ...dedupedSigmaSchemaEdges]
+
+  // ── M3: List | Graph tabs (Q13 verbatim: Sigma after 24, SVG fallback) ─────
+  // Tabs are per-page state; the Graph tab's default is SVG when the slice is
+  // small. `?graph=1` forces the Sigma tab open on load (shareable).
+  let activeTab = 'list' // 'list' | 'graph'
+  onMount(() => {
+    const sp = new URLSearchParams(location.search)
+    if (sp.get('graph') === '1') activeTab = 'graph'
+  })
+  $: graphOn = activeTab === 'graph'
+
+  // Sigma neighbourhood slice: centre = current table, satellites = merged
+  // structured edges (manual + schema), cap 40 rare-first (Q4).
+  // Built by a plain function (not an inline IIFE) — rollup's SSR pre-parse
+  // chokes on `$: x = (() => { /** @type ... */ ... })()`.
+  function buildStructuredNeighbourhood() {
+    const out = []
+    for (const e of allSigmaEdges) {
+      if (e.from === e.to) continue
+      // edges carry fields[] as 'Child.childField → Parent.parentField' strings
+      for (const f of e.fields ?? []) {
+        const m = f.match(/^([^.]+)\.([^\s]+) → ([^.]+)\.([^\s]+)$/)
+        if (!m) continue
+        out.push({ from: m[1], fromField: m[2], to: m[3], toField: m[4] })
+      }
+    }
+    return out
+  }
+  $: structuredNeighbourhood = buildStructuredNeighbourhood()
+
+  $: sigmaSlice = structuredNeighbourhood.length > 0
+    ? { nodes: [...new Set(structuredNeighbourhood.flatMap((e) => [e.from, e.to]))].slice(0, 40), mergedEdges: mergeStructuredEdges(structuredNeighbourhood, getSpecificityMap()) }
+    : null
+
+  $: sigmaNodes = sigmaSlice?.nodes ?? []
+  $: sigmaEdges = sigmaSlice?.mergedEdges ?? []
+  $: sigmaOverflow = (structuredNeighbourhood.length > 0 ? sigmaNodes.length : 0) > 40 ? Math.max(0, sigmaNodes.length - 40) : 0
+
+  // Module pills (Q10): counts over the current Sigma slice.
+  $: graphStateSnap = $graphState
+  $: modCounts = countModules(sigmaNodes)
+  function countModules(tables) {
+    const counts = {}
+    for (const t of tables) {
+      const m = canonicalModule(tableDefs[t]?.module)
+      counts[m ?? 'Unknown'] = (counts[m ?? 'Unknown'] ?? 0) + 1
+    }
+    return counts
+  }
+
+  // URL loop: `?graph=1&modules=...` on toggle (Q12). Pager stays transient.
+  function syncGraphUrl() {
+    const sp = new URLSearchParams(location.search)
+    if (!graphOn) { sp.delete('graph'); sp.delete('modules') }
+    else {
+      sp.set('graph', '1')
+      const mods = graphStateSnap.visibleModules
+      mods.length && mods.length < CANONICAL_MODULES.length ? sp.set('modules', mods.join(',')) : sp.delete('modules')
+    }
+    history.replaceState(null, '', `${location.pathname}?${sp.toString()}`)
+  }
+  function setTab(t) { activeTab = t; syncGraphUrl() }
+  function onSigmaNodeClick(e) {
+    const t = e?.table ?? e?.node ?? e
+    if (t && t !== data.name) goto('/tables/' + t)
+  }
 
   // ── Split by direction ─────────────────────────────────────────────────────
   $: outgoing = data.relationsUsing.filter((r) => r.from === data.name)
@@ -325,7 +403,66 @@
       Relation graph — {data.relationsUsing.length} documented{dedupedSchemaEdges.length > 0 ? ` + ${dedupedSchemaEdges.length} schema FK` : ''}
       {#if $fkLoadState === 'loading'}<span class="mini" style="margin-left:8px;opacity:0.5">loading schema…</span>{/if}
     </div>
-    <RelationGraph tableName={data.name} relations={allEdges} />
+
+    <!-- M3: List | Graph tabs (Q13). List = SVG orbit (unchanged, ≤24 fast path);
+         Graph = Sigma neighbourhood (40 cap, pills + plumbing toggle). -->
+    <div class="graph-tabs" role="tablist" aria-label="Relation graph view">
+      <button
+        class="graph-tab"
+        class:active={activeTab === 'list'}
+        role="tab"
+        aria-selected={activeTab === 'list'}
+        on:click={() => setTab('list')}
+      >List</button>
+      <button
+        class="graph-tab"
+        class:active={activeTab === 'graph'}
+        role="tab"
+        aria-selected={activeTab === 'graph'}
+        on:click={() => setTab('graph')}
+      >Graph{allSigmaEdges.length > 24 ? ' (24+)' : ''}</button>
+    </div>
+
+    {#if !graphOn}
+      <!-- List tab: existing SVG orbit, unchanged -->
+      <RelationGraph tableName={data.name} relations={allEdges} />
+    {:else if graphOn}
+      <!-- Graph tab: Sigma neighbourhood (Sigma after 24; SVG fallback if WebGL
+           unavailable or the slice is tiny). -->
+      {#if sigmaSlice && sigmaNodes.length > 0}
+        <div class="graph-toolbar">
+          <div class="mod-pills" role="group" aria-label="Filter tables by module">
+            <button class="mod-pill" class:active={graphStateSnap.visibleModules.length === 0} on:click={setAllModules}>All</button>
+            {#each CANONICAL_MODULES as m (m)}
+              {@const c = modCounts[m] ?? 0}
+              <button class="mod-pill" class:active={graphStateSnap.visibleModules.includes(m)} class:empty={c === 0} data-module={m} on:click={() => toggleModule(m)}><span class="dot"></span>{m} ({c})</button>
+            {/each}
+            <button class="mod-pill" class:active={graphStateSnap.visibleModules.includes('Unknown')} on:click={() => toggleModule('Unknown')}><span class="dot dot-unknown"></span>Unknown ({modCounts.Unknown ?? 0})</button>
+          </div>
+          <label class="plumb-toggle">
+            <input type="checkbox" role="switch" checked={graphStateSnap.showPlumbing} on:change={(e) => setShowPlumbing(e.currentTarget.checked)} />
+            Show plumbing
+          </label>
+        </div>
+        <SigmaGraph
+          nodes={sigmaNodes}
+          edges={sigmaEdges}
+          centre={data.name}
+          height={480}
+          onnodeclick={onSigmaNodeClick}
+        >
+          <div slot="fallback" class="graph-fallback">
+            <p>WebGL is unavailable in this browser — showing the list view instead.</p>
+          </div>
+        </SigmaGraph>
+        {#if sigmaOverflow > 0}
+          <p class="mini" style="padding:6px 0;color:var(--clr-text-faint)">Showing {sigmaNodes.length} of the nearest relations · {sigmaOverflow} more not shown</p>
+        {/if}
+      {:else}
+        <!-- Tiny slice (<1 structured edge): fall back to the orbit rather than a blank Sigma -->
+        <RelationGraph tableName={data.name} relations={allEdges} />
+      {/if}
+    {/if}
   </section>
 {/if}
 
@@ -706,4 +843,82 @@
   .rel-sort-btn.active { background: rgba(79,195,247,0.15); border-color: rgba(79,195,247,0.4); color: #4fc3f7; }
 
   html.light .rel-sort-btn:hover { background: rgba(0,0,0,0.05); }
+
+  /* ── M3: List | Graph tabs + Sigma toolbar (mirrors /find) ── */
+  .graph-tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 10px;
+    border-bottom: 1px solid var(--clr-border);
+  }
+  .graph-tab {
+    padding: 6px 14px;
+    border: none;
+    background: transparent;
+    color: var(--clr-text-muted);
+    font-size: 12px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    transition: all 0.15s;
+  }
+  .graph-tab:hover { color: var(--clr-text); }
+  .graph-tab.active {
+    color: var(--clr-blue-strong);
+    border-bottom-color: var(--clr-blue-strong);
+  }
+  .graph-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding: 8px 0;
+  }
+  .mod-pills {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .mod-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 9px;
+    border-radius: 20px;
+    border: 1px solid var(--clr-border);
+    background: transparent;
+    color: var(--clr-text-muted);
+    font-size: 11px;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .mod-pill:hover { background: rgba(255,255,255,0.07); color: var(--clr-text); }
+  .mod-pill.active { background: rgba(79,195,247,0.12); border-color: rgba(79,195,247,0.4); color: var(--clr-blue-strong); }
+  .mod-pill .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--clr-blue);
+    flex: none;
+  }
+  .mod-pill .dot-unknown { background: var(--clr-text-faint); }
+  .mod-pill.empty { opacity: 0.45; }
+  .plumb-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--clr-text-muted);
+    cursor: pointer;
+    margin-left: auto;
+  }
+  .graph-fallback {
+    padding: 24px;
+    text-align: center;
+    color: var(--clr-text-faint);
+    border: 1px dashed var(--clr-border);
+    border-radius: 8px;
+  }
+  html.light .mod-pill:hover { background: rgba(0,0,0,0.05); }
 </style>

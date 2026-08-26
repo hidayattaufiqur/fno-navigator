@@ -96,7 +96,9 @@ per-entry reasons live in the private companion project):
 | docs contradict | 44 |
 
 These are the honest cost of the license boundary: the public dataset states
-these pairs, so they are emitted as stated. Entries the pipeline proved wrong
+these pairs, so they are emitted as stated. The counts in this section describe
+our internal verification process only; no Licensed Application/mirror data or
+content is reproduced. Entries the pipeline proved wrong
 (mirror/docs contradict classes, 210 edges) are candidates for the patch card
 (t_5f9e4f6a) to correct/remove at the dataset level. No ghost relations were
 invented: every emitted edge traces to a literal public-dataset entry.

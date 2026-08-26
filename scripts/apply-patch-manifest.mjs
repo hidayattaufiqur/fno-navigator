@@ -14,7 +14,9 @@
 // if the bytes differ (format drift guard). Consequence: the git diff stays
 // minimal (only touched lines differ).
 //
-// Usage: node scripts/apply-patch-manifest.mjs --phase 1|2  (run from repo root)
+// Usage: node scripts/apply-patch-manifest.mjs --phase 1|2 [--only <section>]  (run from repo root)
+//   --only <section>: apply only that manifest section's actions (e.g. mirror_sync).
+//                     Sections not selected are skipped entirely.
 
 import { readFileSync, writeFileSync } from 'node:fs'
 
@@ -24,9 +26,14 @@ const DATASET = '/home/smolpanda/Fun/Projects/MicrosoftDynamicsTableAssociations
 const phaseArg = process.argv.indexOf('--phase')
 const PHASE = phaseArg >= 0 ? Number(process.argv[phaseArg + 1]) : NaN
 if (![1, 2].includes(PHASE)) {
-  console.error('usage: node scripts/apply-patch-manifest.mjs --phase 1|2')
+  console.error('usage: node scripts/apply-patch-manifest.mjs --phase 1|2 [--only <section>]')
   process.exit(2)
 }
+
+// --only <section>: restrict application to one manifest section
+const onlyArg = process.argv.indexOf('--only')
+const ONLY = onlyArg >= 0 ? process.argv[onlyArg + 1] : null
+const sectionSelected = (name) => !ONLY || ONLY === name
 
 const raw = readFileSync(DATASET, 'utf8')
 const entries = JSON.parse(raw)
@@ -78,7 +85,7 @@ entries.forEach((e, i) => {
 
 if (PHASE === 1) {
   // 1a. tax_case.adds: pure new entries, appended at the end
-  const taxAdds = m.sections.tax_case.adds
+  const taxAdds = sectionSelected('tax_case') ? m.sections.tax_case.adds : []
   const taxAdded = []
   for (const a of taxAdds) {
     if (!a.entry?.ParentTableName) { console.error('tax_case.adds entry missing .entry'); process.exit(3) }
@@ -92,7 +99,9 @@ if (PHASE === 1) {
   }
 
   // 1b. add_corrected: swap `replaces` (dataset) -> corrected `entry`, in place
-  const acts = m.sections.suspect_verdict.actions
+  const acts = sectionSelected('suspect_verdict')
+    ? m.sections.suspect_verdict.actions
+    : { add_corrected: [], promote_verified: [], remove: [] }
   const replaced = []
   for (const a of acts.add_corrected) {
     const k = key(a.replaces)
@@ -132,8 +141,60 @@ if (PHASE === 1) {
     promoted.push({ at: i, old: old.ParentTableName + '.' + old.ParentFieldName, new: a.entry.ParentTableName + '.' + a.entry.ParentFieldName })
   }
 
+  // 1d. non_tax_gaps.adds: pure new entries, appended at the end
+  const nonTaxAdds = sectionSelected('non_tax_gaps') ? (m.sections.non_tax_gaps?.adds ?? []) : []
+  const nonTaxAdded = []
+  for (const a of nonTaxAdds) {
+    if (!a.entry?.ParentTableName) { console.error('non_tax_gaps.adds entry missing .entry'); process.exit(3) }
+    if (index.has(key(a.entry))) {
+      console.error(`non_tax add ALREADY EXISTS: ${key(a.entry)}`)
+      process.exit(3)
+    }
+    entries.push(a.entry)
+    index.set(key(a.entry), entries.length - 1)
+    nonTaxAdded.push(a.entry)
+  }
+
+  // 1e. mirror_sync.actions.add_corrected: in-place replace (declaring-side corrections)
+  const msCorrects = sectionSelected('mirror_sync') ? (m.sections.mirror_sync?.actions?.add_corrected ?? []) : []
+  const msReplaced = []
+  for (const a of msCorrects) {
+    const k = key(a.replaces)
+    const i = index.get(k)
+    if (i === undefined) {
+      console.error(`mirror_sync add_corrected.replaces NOT FOUND in dataset (ghost): ${k}`)
+      process.exit(3)
+    }
+    if (index.has(key(a.entry))) {
+      console.error(`mirror_sync add_corrected.entry ALREADY EXISTS: ${key(a.entry)}`)
+      process.exit(3)
+    }
+    const old = entries[i]
+    entries[i] = a.entry
+    index.delete(k)
+    index.set(key(a.entry), i)
+    msReplaced.push({ at: i, old: old.ParentTableName + '.' + old.ParentFieldName, new: a.entry.ParentTableName + '.' + a.entry.ParentFieldName })
+  }
+
+  // 1f. mirror_sync_2.adds: pure new entries (re-adds confirmed by partial batch), appended
+  const ms2Adds = sectionSelected('mirror_sync_2') ? (m.sections.mirror_sync_2?.adds ?? []) : []
+  const ms2Added = []
+  for (const a of ms2Adds) {
+    if (!a.entry?.ParentTableName) { console.error('mirror_sync_2.adds entry missing .entry'); process.exit(3) }
+    if (index.has(key(a.entry))) {
+      console.error(`mirror_sync_2 add ALREADY EXISTS: ${key(a.entry)}`)
+      process.exit(3)
+    }
+    entries.push(a.entry)
+    index.set(key(a.entry), entries.length - 1)
+    ms2Added.push(a.entry)
+  }
+
   console.log(`phase 1 applied: ${taxAdded.length} tax adds appended, ` +
-    `${replaced.length} add_corrected replaced in place, ${promoted.length} promote_verified replaced in place`)
+    `${replaced.length} add_corrected replaced in place, ${promoted.length} promote_verified replaced in place, ` +
+    `${nonTaxAdded.length} non_tax_gaps adds appended, ${msReplaced.length} mirror_sync corrections replaced in place, ` +
+    `${ms2Added.length} mirror_sync_2 re-adds appended` +
+    (ONLY ? ` [only=${ONLY}]` : ''))
   console.log(`entries: ${entries.length} (was ${JSON.parse(raw).length})`)
   writeFileSync(DATASET, serialize(entries))
   console.log(`wrote ${DATASET}`)
