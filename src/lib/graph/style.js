@@ -17,19 +17,22 @@ export const PLUMBING_FAINT_ALPHA = 0.18
 
 /**
  * Node size formula (Q2, Second Brain NODE_SIZE shape).
+ * M5 readability: raised base 2.5 → 4.0 and per-degree slope 0.25 → 0.45 so
+ * hubs read clearly at a glance (degree 24 → ~15 units vs ~8.5 before).
  * @param {number} degree distinct FK neighbours within the rendered slice
  */
 export function nodeSize(degree) {
-  return 2.5 + Math.min(degree, 24) * 0.25
+  return 4 + Math.min(degree, 24) * 0.45
 }
 
 /**
  * Edge thickness px from specificity bucket (Q6: rarest wins → thickest).
  * Inverted artifact: bucket 3 = rare = 4px … bucket 0 = common = 1px.
+ * M5 readability: floor 1.5px keeps common joins visible on busy panes.
  * @param {number} maxBucket 0|1|2|3
  */
 export function edgeThickness(maxBucket) {
-  return Math.max(1, Math.min(4, (maxBucket | 0) + 1))
+  return Math.max(1.5, Math.min(4.5, (maxBucket | 0) + 1.5))
 }
 
 /**

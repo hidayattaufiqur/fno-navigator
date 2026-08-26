@@ -10,7 +10,7 @@
   import { TOOLTIP_COPY, REASON_TOOLTIP_COPY, LEGEND_GROUPS } from '$lib/findLegendCopy'
   import { goto } from '$app/navigation'
   // ── M2 graph pane (TDD §4.1) ─────────────────────────────────────────────
-  import SigmaGraph from '$lib/components/SigmaGraph.svelte'
+  import ForceGraph3D from '$lib/components/ForceGraph3D.svelte'
   import { selectSlice, mergeStructuredEdges } from '$lib/graph/selectSlice'
   import { getForwardMap, getReverseMap } from '$lib/stores/fkMap'
   import { getSpecificityMap } from '$lib/stores/specificity'
@@ -875,42 +875,12 @@
 
     {#if slice && graphOn}
       <section class="graph-pane" aria-label="Interactive path graph">
-        <div class="graph-toolbar">
-          <div class="mod-pills" role="group" aria-label="Filter tables by module">
-            <button
-              class="mod-pill"
-              class:active={graphStateSnap.visibleModules.length === 0}
-              on:click={() => { setAllModules(); syncGraphUrl() }}
-            >All</button>
-            {#each CANONICAL_MODULES as m (m)}
-              {@const c = modCounts[m] ?? 0}
-              <button
-                class="mod-pill"
-                class:active={graphStateSnap.visibleModules.includes(m)}
-                class:empty={c === 0 && graphStateSnap.visibleModules.length === 0}
-                data-module={m}
-                on:click={() => toggleMod(m)}
-              ><span class="dot"></span>{m} ({c})</button>
-            {/each}
-            <button
-              class="mod-pill"
-              class:active={graphStateSnap.visibleModules.includes('Unknown')}
-              class:empty={(modCounts.Unknown ?? 0) === 0 && graphStateSnap.visibleModules.length === 0}
-              on:click={() => toggleMod('Unknown')}
-            ><span class="dot dot-unknown"></span>Unknown ({modCounts.Unknown ?? 0})</button>
-          </div>
-          <label class="plumb-toggle">
-            <input type="checkbox" checked={graphStateSnap.showPlumbing} on:change={setPlumbing} />
-            Show plumbing
-          </label>
-          <button class="hide-graph-btn" on:click={disableGraph}>Hide graph</button>
-        </div>
         <div class="graph-wrap">
-          <SigmaGraph
+          <ForceGraph3D
             nodes={slice.nodes}
             edges={slice.mergedEdges}
             meta={metaMap}
-            height={480}
+            height={520}
             bind:this={sigmaApi}
             onnodeclick={openPop}
           >
@@ -918,7 +888,43 @@
               <p>WebGL is unavailable in this browser — the interactive graph is disabled.</p>
               <p class="mini">The ranked path list below remains fully functional.</p>
             </div>
-          </SigmaGraph>
+          </ForceGraph3D>
+          <!-- Glassy toolbar floats over the constellation -->
+          <div class="graph-toolbar" role="toolbar" aria-label="Graph controls">
+            <div class="mod-pills" role="group" aria-label="Filter tables by module">
+              <button
+                class="mod-pill"
+                class:active={graphStateSnap.visibleModules.length === 0}
+                on:click={() => { setAllModules(); syncGraphUrl() }}
+              >All</button>
+              {#each CANONICAL_MODULES as m (m)}
+                {@const c = modCounts[m] ?? 0}
+                <button
+                  class="mod-pill"
+                  class:active={graphStateSnap.visibleModules.includes(m)}
+                  class:empty={c === 0 && graphStateSnap.visibleModules.length === 0}
+                  data-module={m}
+                  on:click={() => toggleMod(m)}
+                ><span class="dot"></span>{m} ({c})</button>
+              {/each}
+              <button
+                class="mod-pill"
+                class:active={graphStateSnap.visibleModules.includes('Unknown')}
+                class:empty={(modCounts.Unknown ?? 0) === 0 && graphStateSnap.visibleModules.length === 0}
+                on:click={() => toggleMod('Unknown')}
+              ><span class="dot dot-unknown"></span>Unknown ({modCounts.Unknown ?? 0})</button>
+            </div>
+            <div class="toolbar-actions">
+              <label class="plumb-toggle">
+                <input type="checkbox" checked={graphStateSnap.showPlumbing} on:change={setPlumbing} />
+                Show plumbing
+              </label>
+              <button class="hide-graph-btn" on:click={disableGraph}>Hide graph</button>
+            </div>
+          </div>
+          <div class="graph-status mini" role="status">
+            Showing {slice.nodes.length} of the ranked-path tables{slice.overflow > 0 ? ` · ${slice.overflow} not shown` : ''}
+          </div>
           {#if popTable}
             <div class="pop-card" style="left:{popPos.x}px; top:{popPos.y}px" role="dialog" aria-label="{popTable} actions">
               <button class="pop-x" on:click={closePop} aria-label="Close">✕</button>
@@ -935,14 +941,11 @@
             </div>
           {/if}
         </div>
-        <div class="graph-status mini">
-          Showing {slice.nodes.length} of the ranked-path tables{slice.overflow > 0 ? ` · ${slice.overflow} not shown` : ''}
-        </div>
       </section>
     {:else if slice && !graphOn}
       <div class="show-graph-row">
         <button class="show-graph-btn" on:click={enableGraph}>Show graph</button>
-        <span class="mini">WebGL view of the paths below</span>
+        <span class="mini">WebGL constellation view of the paths below</span>
       </div>
     {/if}
 
@@ -1836,21 +1839,34 @@
       grid-template-columns: 1fr;
     }
   }
-  /* ── M2 graph pane ── */
+  /* ── M5 graph pane: constellation over deep space ── */
   .graph-pane {
     margin: 18px 0 8px;
-    border: 1px solid var(--clr-border-subtle);
     border-radius: var(--r-lg, 8px);
-    background: var(--clr-surface);
+    background: transparent;
     overflow: hidden;
   }
+  .graph-wrap {
+    position: relative;
+  }
   .graph-toolbar {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    right: 10px;
+    z-index: 20;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 8px;
-    padding: 10px 12px;
-    border-bottom: 1px solid var(--clr-border-subtle);
+    padding: 8px 10px;
+    /* glassmorphism: frost/d9s-labelled translucent bar over the starfield */
+    background: var(--toolbar-glass, rgba(13, 17, 23, 0.55));
+    border: 1px solid var(--clr-border-subtle);
+    border-radius: var(--r-lg, 8px);
+    backdrop-filter: blur(14px) saturate(1.3);
+    -webkit-backdrop-filter: blur(14px) saturate(1.3);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
   }
   .mod-pills {
     display: flex;
@@ -1869,13 +1885,19 @@
     border: 1px solid var(--clr-border-subtle);
     border-radius: 999px;
     cursor: pointer;
-    transition: border-color 0.12s, color 0.12s;
+    transition: border-color 0.12s, color 0.12s, background 0.12s;
   }
   .mod-pill[data-module] { border-color: var(--mod-clr-border); background: var(--mod-clr-bg); }
-  .mod-pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--mod-clr, var(--clr-text-faint)); }
-  .mod-pill .dot-unknown { background: var(--clr-text-faint); }
-  .mod-pill.active { color: var(--clr-text); border-color: var(--clr-border-accent); }
+  .mod-pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--mod-clr, var(--clr-text-faint)); filter: drop-shadow(0 0 3px var(--mod-clr, transparent)); }
+  .mod-pill .dot-unknown { background: var(--clr-text-faint); filter: none; }
+  .mod-pill.active { color: var(--clr-text); border-color: var(--clr-border-accent); background: var(--mod-clr-bg, rgba(90,148,232,0.08)); }
   .mod-pill.empty { opacity: 0.45; }
+  .toolbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-left: auto;
+  }
   .plumb-toggle {
     display: inline-flex;
     align-items: center;
@@ -1896,6 +1918,7 @@
     font-size: 11.5px;
     padding: 3px 10px;
     white-space: nowrap;
+    transition: color 0.12s, border-color 0.12s;
   }
   .hide-graph-btn:hover, .show-graph-btn:hover { color: var(--clr-text); border-color: var(--clr-border-accent); }
   .show-graph-row {
@@ -1904,8 +1927,21 @@
     gap: 10px;
     margin: 14px 0 4px;
   }
-  .graph-wrap { position: relative; }
-  .graph-status { padding: 6px 12px; border-top: 1px solid var(--clr-border-subtle); }
+  .graph-status {
+    position: absolute;
+    bottom: 10px;
+    right: 12px;
+    z-index: 20;
+    padding: 4px 10px;
+    font-size: 11px;
+    color: var(--clr-text-muted);
+    background: var(--toolbar-glass, rgba(13, 17, 23, 0.55));
+    border: 1px solid var(--clr-border-subtle);
+    border-radius: 999px;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    pointer-events: none;
+  }
   .pop-card {
     position: absolute;
     transform: translate(-50%, -130%);
@@ -1915,10 +1951,12 @@
     gap: 4px;
     min-width: 180px;
     padding: 10px 12px;
-    background: var(--clr-label-bg);
+    background: var(--toolbar-glass, rgba(13, 17, 23, 0.75));
     border: 1px solid var(--clr-label-bd);
     border-radius: var(--r-md, 6px);
-    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(90, 148, 232, 0.08);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
     pointer-events: auto;
   }
   .pop-card strong { font-family: inherit; font-size: 13px; color: var(--clr-text); }
@@ -1950,7 +1988,14 @@
     background: var(--clr-blue-strong, var(--clr-blue));
     border: 1px solid transparent;
     color: #fff;
+    box-shadow: 0 0 12px rgba(90, 148, 232, 0.35);
   }
-  .pop-expand:disabled { opacity: 0.4; cursor: default; }
+  .pop-expand:disabled { opacity: 0.4; cursor: default; box-shadow: none; }
+
+  html.light .graph-toolbar,
+  html.light .graph-status,
+  html.light .pop-card {
+    --toolbar-glass: rgba(246, 248, 250, 0.72);
+  }
 
 </style>
