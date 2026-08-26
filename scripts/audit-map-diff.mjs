@@ -5,7 +5,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-const ROOT = '/home/smolpanda/Fun/Projects/fno-interactor'
+const ROOT = '/home/smolpanda/Fun/Projects/fno-navigator'
 const OLD_MAP = '/tmp/old-map-ec6b838/fk-map.json'
 const NEW_MAP = '/tmp/map-final1/fk-map.json'
 const MANIFEST = '/home/smolpanda/Fun/Projects/fno-dev-copilot-spike/data/patch-manifest.json'

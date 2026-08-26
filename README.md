@@ -1,4 +1,4 @@
-# FnO Navigator - D365FO Process Navigator
+# FnO Navigator
 
 A static SvelteKit app for navigating Dynamics 365 Finance & Operations (D365FO) business processes, tracing table relationships, and exploring technical customisations.
 
@@ -34,7 +34,7 @@ Key decisions
 
 Status
 ------
-Live and in active use. The site is deployed at https://fno.hidayattaufiqur.dev and the source code is available at https://github.com/hidayattaufiqur/fno-interactor.
+Live and in active use. The site is deployed at https://fno.hidayattaufiqur.dev and the source code is available at https://github.com/hidayattaufiqur/fno-navigator.
 
 What's inside
 -------------

@@ -406,7 +406,7 @@
 </script>
 
 <svelte:head>
-  <title>Find Table Path · D365FO Navigator</title>
+  <title>Find Table Path · FnO Navigator</title>
 </svelte:head>
 
 <header class="hero">

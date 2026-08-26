@@ -154,7 +154,7 @@
 </script>
 
 <svelte:head>
-  <title>{data.name} · Table Reference · D365FO Navigator</title>
+  <title>{data.name} · Table Reference · FnO Navigator</title>
 </svelte:head>
 
 <div class="breadcrumb">

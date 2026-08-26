@@ -67,7 +67,7 @@
   <button class="hamburger" aria-label="Open navigation" on:click={() => (sidebarOpen = true)}>
     <span></span><span></span><span></span>
   </button>
-  <span class="mobile-title">D365FO Navigator</span>
+  <span class="mobile-title">FnO Navigator</span>
 </div>
 
 <!-- Backdrop overlay — click to close sidebar -->
@@ -87,7 +87,7 @@
       <div class="dot"></div>
       <div>
         <div class="eyebrow">D365FO helper</div>
-        <h1>Process Navigator</h1>
+        <h1>FnO Navigator</h1>
       </div>
     </a>
 

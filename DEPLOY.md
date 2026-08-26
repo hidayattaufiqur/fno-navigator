@@ -21,4 +21,4 @@ This fires the `fno-deploy.service` systemd oneshot (watched by
 nginx serves the files directly, so no nginx reload is needed after a deploy.
 The unit definitions and the nginx vhost (headers, Cloudflare-only origin
 protection, SPA fallback) live in the nix-config repo under
-`services/apps/systemd/fno-interactor.nix` and `services/apps/nginx/default.nix`.
+`services/apps/systemd/fno-navigator.nix` and `services/apps/nginx/default.nix`.

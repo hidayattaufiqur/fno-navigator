@@ -58,7 +58,7 @@
 </script>
 
 <svelte:head>
-  <title>{flow.title} — {stage.title} · D365FO Navigator</title>
+  <title>{flow.title} — {stage.title} · FnO Navigator</title>
 </svelte:head>
 
 <header class="flow-header" data-module={flow.module}>
