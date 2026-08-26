@@ -33,21 +33,28 @@
   --clr-border-accent: rgba(90, 148, 232, 0.45);
   --dot-color: #1c2128;
   /* Graph edge / node colour tokens */
-  --clr-edge-out:       rgba(90, 148, 232, 0.30);
-  --clr-edge-out-h:     rgba(90, 148, 232, 0.85);
-  --clr-edge-in:        rgba(78, 201, 148, 0.30);
-  --clr-edge-in-h:      rgba(78, 201, 148, 0.85);
-  --clr-edge-schema:    rgba(90, 148, 232, 0.12);
-  --clr-node-sat-bd:      rgba(90, 148, 232, 0.22);
-  --clr-node-sat-hover:   rgba(90, 148, 232, 0.10);
-  --clr-node-sat-hover-bd:rgba(90, 148, 232, 0.55);
-  --clr-node-ctr:         rgba(78, 201, 148, 0.10);
-  --clr-node-ctr-bd:      rgba(78, 201, 148, 0.50);
+  --clr-edge-out:       rgba(90, 148, 232, 0.55);
+  --clr-edge-out-h:     rgba(90, 148, 232, 0.95);
+  --clr-edge-in:        rgba(78, 201, 148, 0.55);
+  --clr-edge-in-h:      rgba(78, 201, 148, 0.95);
+  --clr-edge-schema:    rgba(90, 148, 232, 0.18);
+  --clr-node-sat-bd:      rgba(90, 148, 232, 0.65);
+  --clr-node-sat-hover:   rgba(90, 148, 232, 0.30);
+  --clr-node-sat-hover-bd:rgba(90, 148, 232, 0.95);
+  --clr-node-ctr:         rgba(78, 201, 148, 0.30);
+  --clr-node-ctr-bd:      rgba(78, 201, 148, 0.95);
   --clr-label-bg:       rgba(10, 14, 20, 0.93);
   --clr-label-bd:       rgba(90, 148, 232, 0.20);
   --r-sm: 4px;
   --r-md: 6px;
   --r-lg: 8px;
+  /* M5 constellation backdrop tokens (Starfield.svelte) */
+  --clr-star-core:   #dbe7ff;   /* neutral star body */
+  --clr-star-halo:   rgba(90, 148, 232, 0.45);
+  --clr-star-accent: #ffd9a0;   /* warm accent stars */
+  --clr-star-near:   #7aacf0;   /* blue accent stars (near layer) */
+  --clr-star-bg:     rgba(3, 7, 17, 0.45); /* pane tint behind the graph */
+  --clr-star-density: 1;
 }
 
 /* ── Light mode ── */
@@ -68,18 +75,25 @@ html.light {
   --clr-border-accent: rgba(9, 105, 218, 0.4);
   --dot-color: rgba(175, 184, 193, 0.4);
   /* Graph tokens — darker, more saturated for light bg */
-  --clr-edge-out:       rgba(9, 105, 218, 0.45);
-  --clr-edge-out-h:     rgba(9, 105, 218, 0.90);
-  --clr-edge-in:        rgba(26, 127, 55, 0.45);
-  --clr-edge-in-h:      rgba(26, 127, 55, 0.90);
-  --clr-edge-schema:    rgba(9, 105, 218, 0.18);
-  --clr-node-sat-bd:      rgba(9, 105, 218, 0.30);
-  --clr-node-sat-hover:   rgba(9, 105, 218, 0.07);
-  --clr-node-sat-hover-bd:rgba(9, 105, 218, 0.50);
-  --clr-node-ctr:         rgba(26, 127, 55, 0.07);
-  --clr-node-ctr-bd:      rgba(26, 127, 55, 0.40);
+  --clr-edge-out:       rgba(9, 105, 218, 0.55);
+  --clr-edge-out-h:     rgba(9, 105, 218, 1.0);
+  --clr-edge-in:        rgba(26, 127, 55, 0.55);
+  --clr-edge-in-h:      rgba(26, 127, 55, 1.0);
+  --clr-edge-schema:    rgba(9, 105, 218, 0.20);
+  --clr-node-sat-bd:      rgba(9, 105, 218, 0.55);
+  --clr-node-sat-hover:   rgba(9, 105, 218, 0.25);
+  --clr-node-sat-hover-bd:rgba(9, 105, 218, 0.95);
+  --clr-node-ctr:         rgba(26, 127, 55, 0.25);
+  --clr-node-ctr-bd:      rgba(26, 127, 55, 0.90);
   --clr-label-bg:       rgba(246, 248, 250, 0.97);
   --clr-label-bd:       rgba(9, 105, 218, 0.20);
+  /* M5 constellation backdrop — light mode: fewer, fainter stars */
+  --clr-star-core:   #ffffff;
+  --clr-star-halo:   rgba(9, 105, 218, 0.28);
+  --clr-star-accent: #f0d9b0;
+  --clr-star-near:   #6f9fdc;
+  --clr-star-bg:     rgba(246, 248, 250, 0.0);
+  --clr-star-density: 0.5;
 }
 
 *,

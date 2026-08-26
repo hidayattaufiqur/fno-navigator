@@ -23,8 +23,10 @@ if (!existsSync(chunksDir) || !existsSync(entryDir)) {
   process.exit(1)
 }
 
-// Lazy graph stack markers: the sigma/graphology bundle self-references these.
-const LAZY_MARKERS = ['graphology-layout-forceatlas2', 'getNodeDisplayData', 'sigma from']
+// Lazy graph stack markers: class names from the three/3d-force-graph bundle.
+// Minified chunk content is what we check, so use identifiers that survive
+// terser (string class names, not package names or variable refs).
+const LAZY_MARKERS = ['IcosahedronGeometry', 'UnrealBloomPass']
 
 const entries = readdirSync(entryDir).filter((f) => f.endsWith('.js'))
 let entryLeak = false
@@ -42,7 +44,7 @@ const chunks = readdirSync(chunksDir).filter((f) => f.endsWith('.js'))
 let lazyChunk = false
 for (const c of chunks) {
   const content = readFileSync(join(chunksDir, c), 'utf8')
-  if (content.includes('graphology-layout-forceatlas2')) { lazyChunk = true; break }
+  if (content.includes('UnrealBloomPass')) { lazyChunk = true; break }
 }
 
 if (entryLeak) process.exit(1)

@@ -14,23 +14,33 @@
  *        node tests/e2e-graph-probe.mjs --url http://localhost:4173
  * Exit 0 pass, 2 on missing selector (never unhandled throw).
  */
-import { chromium } from '@playwright/test'
+import { createRequire } from 'node:module'
 import { writeFileSync } from 'node:fs'
+// Resolve playwright from ~/e2e-tools (module resolution is script-location
+// based — bare imports don't see the repo's node_modules for this package).
+const require = createRequire('/home/smolpanda/e2e-tools/package.json')
+const { chromium: playwrightChromium } = require('playwright')
+
+const chromium = playwrightChromium
 
 const url = process.argv[process.argv.indexOf('--url') + 1] || 'http://localhost:4173'
 
 async function main() {
-  const browser = await chromium.launch()
+  const browser = await chromium.launch({
+    executablePath: process.env.CHROMIUM_PATH || process.env.AGENT_BROWSER_EXECUTABLE_PATH || '/home/smolpanda/.local/bin/chromium-fhs',
+    args: ['--no-sandbox'],
+  })
   const results = []
   for (const [name, viewport] of [['desktop', { width: 1280, height: 800 }], ['mobile', { width: 375, height: 812 }]]) {
     const page = await browser.newPage({ viewport })
     await page.goto(`${url}/find?from=InventTable&to=CustTable&maxHops=4&sort=unique&graph=1`, { waitUntil: 'networkidle' })
     await page.waitForTimeout(2500) // FA2 cold 800ms + settle
 
-    const canvas = await page.locator('canvas[data-testid="sigma"]').count()
+    const sigmaPane = await page.locator('[data-testid="sigma"]').count()
+    const sigmaCanvas = await page.locator('[data-testid="sigma"] canvas').count()
     const svg = await page.locator('svg[data-testid="orbit"]').count()
-    if (canvas === 0 && svg === 0) {
-      results.push(`[${name}] FAIL: no sigma canvas nor orbit svg`)
+    if (sigmaPane === 0 && svg === 0) {
+      results.push(`[${name}] FAIL: no sigma pane nor orbit svg`)
       await page.screenshot({ path: `/tmp/e2e-graph-probe.${name}.png` })
       await browser.close()
       console.log(results.join('\n'))
@@ -40,11 +50,10 @@ async function main() {
     const pills = await page.locator('.mod-pill').count()
     const plumbing = await page.locator('.plumb-toggle input[type="checkbox"]').count()
 
-    // Pop → Expand: click first node (if canvas present) and look for the pop card
+    // Pop → Expand: click first node (if sigma present) and look for the pop card
     let expanded = 'n/a'
-    if (canvas > 0) {
-      const node = page.locator('canvas[data-testid="sigma"]').first()
-      const box = await node.boundingBox()
+    if (sigmaPane > 0) {
+      const box = await page.locator('[data-testid="sigma"]').first().boundingBox()
       if (box) {
         await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
         await page.waitForTimeout(600)
@@ -55,7 +64,7 @@ async function main() {
       await page.waitForTimeout(300)
     }
 
-    results.push(`[${name}] canvas=${canvas} svg=${svg} pills=${pills} plumbing=${plumbing} popExpand=${expanded}`)
+    results.push(`[${name}] sigma=${sigmaPane} sigmaCanvas=${sigmaCanvas} svg=${svg} pills=${pills} plumbing=${plumbing} popExpand=${expanded}`)
 
     // tables/[name] tab check
     await page.goto(`${url}/tables/InventTable?graph=1`, { waitUntil: 'networkidle' })

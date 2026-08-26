@@ -7,7 +7,7 @@
   import { fkLoadState, loadFkMap, getSchemaEdgesForTable } from '$lib/stores/fkMap'
   import { getSpecificityMap, loadSpecificity } from '$lib/stores/specificity'
   import { COMMON_METHODS, METHOD_CATEGORIES } from '$lib/data/tableMethods'
-  import SigmaGraph from '$lib/components/SigmaGraph.svelte'
+  import ForceGraph3D from '$lib/components/ForceGraph3D.svelte'
   import { mergeStructuredEdges } from '$lib/graph/selectSlice'
   import { graphState, CANONICAL_MODULES, toggleModule, setAllModules, setShowPlumbing } from '$lib/stores/graphState'
   import { goto } from '$app/navigation'
@@ -430,34 +430,36 @@
       <!-- Graph tab: Sigma neighbourhood (Sigma after 24; SVG fallback if WebGL
            unavailable or the slice is tiny). -->
       {#if sigmaSlice && sigmaNodes.length > 0}
-        <div class="graph-toolbar">
-          <div class="mod-pills" role="group" aria-label="Filter tables by module">
-            <button class="mod-pill" class:active={graphStateSnap.visibleModules.length === 0} on:click={setAllModules}>All</button>
-            {#each CANONICAL_MODULES as m (m)}
-              {@const c = modCounts[m] ?? 0}
-              <button class="mod-pill" class:active={graphStateSnap.visibleModules.includes(m)} class:empty={c === 0} data-module={m} on:click={() => toggleModule(m)}><span class="dot"></span>{m} ({c})</button>
-            {/each}
-            <button class="mod-pill" class:active={graphStateSnap.visibleModules.includes('Unknown')} on:click={() => toggleModule('Unknown')}><span class="dot dot-unknown"></span>Unknown ({modCounts.Unknown ?? 0})</button>
+        <div class="graph-wrap">
+          <ForceGraph3D
+            nodes={sigmaNodes}
+            edges={sigmaEdges}
+            centre={data.name}
+            height={520}
+            onnodeclick={onSigmaNodeClick}
+          >
+            <div slot="fallback" class="graph-fallback">
+              <p>WebGL is unavailable in this browser — showing the list view instead.</p>
+            </div>
+          </ForceGraph3D>
+          <div class="graph-toolbar" role="toolbar" aria-label="Graph controls">
+            <div class="mod-pills" role="group" aria-label="Filter tables by module">
+              <button class="mod-pill" class:active={graphStateSnap.visibleModules.length === 0} on:click={setAllModules}>All</button>
+              {#each CANONICAL_MODULES as m (m)}
+                {@const c = modCounts[m] ?? 0}
+                <button class="mod-pill" class:active={graphStateSnap.visibleModules.includes(m)} class:empty={c === 0} data-module={m} on:click={() => toggleModule(m)}><span class="dot"></span>{m} ({c})</button>
+              {/each}
+              <button class="mod-pill" class:active={graphStateSnap.visibleModules.includes('Unknown')} on:click={() => toggleModule('Unknown')}><span class="dot dot-unknown"></span>Unknown ({modCounts.Unknown ?? 0})</button>
+            </div>
+            <label class="plumb-toggle">
+              <input type="checkbox" role="switch" checked={graphStateSnap.showPlumbing} on:change={(e) => setShowPlumbing(e.currentTarget.checked)} />
+              Show plumbing
+            </label>
           </div>
-          <label class="plumb-toggle">
-            <input type="checkbox" role="switch" checked={graphStateSnap.showPlumbing} on:change={(e) => setShowPlumbing(e.currentTarget.checked)} />
-            Show plumbing
-          </label>
+          {#if sigmaOverflow > 0}
+            <p class="graph-status mini">Showing {sigmaNodes.length} of the nearest relations · {sigmaOverflow} more not shown</p>
+          {/if}
         </div>
-        <SigmaGraph
-          nodes={sigmaNodes}
-          edges={sigmaEdges}
-          centre={data.name}
-          height={480}
-          onnodeclick={onSigmaNodeClick}
-        >
-          <div slot="fallback" class="graph-fallback">
-            <p>WebGL is unavailable in this browser — showing the list view instead.</p>
-          </div>
-        </SigmaGraph>
-        {#if sigmaOverflow > 0}
-          <p class="mini" style="padding:6px 0;color:var(--clr-text-faint)">Showing {sigmaNodes.length} of the nearest relations · {sigmaOverflow} more not shown</p>
-        {/if}
       {:else}
         <!-- Tiny slice (<1 structured edge): fall back to the orbit rather than a blank Sigma -->
         <RelationGraph tableName={data.name} relations={allEdges} />
@@ -869,17 +871,33 @@
     color: var(--clr-blue-strong);
     border-bottom-color: var(--clr-blue-strong);
   }
+  .graph-wrap {
+    position: relative;
+  }
   .graph-toolbar {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    right: 10px;
+    z-index: 20;
     display: flex;
     align-items: center;
     gap: 10px;
     flex-wrap: wrap;
-    padding: 8px 0;
+    padding: 8px 10px;
+    /* glassmorphism over the starfield — same chrome as /find */
+    background: var(--toolbar-glass, rgba(13, 17, 23, 0.55));
+    border: 1px solid var(--clr-border-subtle);
+    border-radius: var(--r-lg, 8px);
+    backdrop-filter: blur(14px) saturate(1.3);
+    -webkit-backdrop-filter: blur(14px) saturate(1.3);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
   }
   .mod-pills {
     display: flex;
     gap: 6px;
     flex-wrap: wrap;
+    flex: 1;
   }
   .mod-pill {
     display: inline-flex;
@@ -913,6 +931,20 @@
     cursor: pointer;
     margin-left: auto;
   }
+  .graph-status {
+    position: absolute;
+    bottom: 10px;
+    right: 12px;
+    z-index: 20;
+    padding: 4px 10px;
+    color: var(--clr-text-muted);
+    background: var(--toolbar-glass, rgba(13, 17, 23, 0.55));
+    border: 1px solid var(--clr-border-subtle);
+    border-radius: 999px;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    pointer-events: none;
+  }
   .graph-fallback {
     padding: 24px;
     text-align: center;
@@ -921,4 +953,8 @@
     border-radius: 8px;
   }
   html.light .mod-pill:hover { background: rgba(0,0,0,0.05); }
+  html.light .graph-toolbar,
+  html.light .graph-status {
+    --toolbar-glass: rgba(246, 248, 250, 0.72);
+  }
 </style>

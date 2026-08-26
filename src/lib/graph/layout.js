@@ -58,8 +58,10 @@ export function wedgeIndex(table, module) {
 /**
  * Initial position for a table inside its module wedge.
  * azimuth = wedge*45° + 22.5° centre ± 12° jitter
- * radius  = 10 + (idx%7)*2 ± 0.75 jitter   (Second Brain seedPositions shape,
- *                                           Graphology units — do NOT upscale)
+ * radius  = 14 + (idx%7)*3 ± 0.75 jitter   (M5 readability: widened ring 10→14
+ *                                           base and 2→3 step so seeded nodes
+ *                                           start less overlapped; FA2 relaxes
+ *                                           the rest)
  * @param {string} table
  * @param {number} idxInWedge  insertion order of this table within its wedge
  * @param {string | null | undefined} module  canonicalModule() output or null
@@ -68,7 +70,7 @@ export function wedgeIndex(table, module) {
 export function wedgeSeed(table, idxInWedge, module) {
   const baseDeg = wedgeIndex(table, module) * WEDGE_DEG + WEDGE_DEG / 2
   const azDeg = baseDeg + jit(`${table}:az`, 12)
-  const radius = 10 + (idxInWedge % 7) * 2 + jit(`${table}:r`, 0.75)
+  const radius = 14 + (idxInWedge % 7) * 3 + jit(`${table}:r`, 0.75)
   const az = (azDeg * Math.PI) / 180
   return { x: radius * Math.cos(az), y: radius * Math.sin(az) }
 }
