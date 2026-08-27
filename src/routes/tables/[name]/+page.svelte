@@ -965,9 +965,9 @@
     border: 1px dashed var(--clr-border);
     border-radius: 8px;
   }
-  html.light .mod-pill:hover { background: rgba(0,0,0,0.05); }
-  html.light .graph-toolbar,
-  html.light .graph-status {
+  :global(html.light) .mod-pill:hover { background: rgba(0,0,0,0.05); }
+  :global(html.light) .graph-toolbar,
+  :global(html.light) .graph-status {
     --toolbar-glass: rgba(246, 248, 250, 0.72);
   }
 </style>
