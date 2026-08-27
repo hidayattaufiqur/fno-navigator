@@ -2005,9 +2005,9 @@
   }
   .pop-expand:disabled { opacity: 0.4; cursor: default; box-shadow: none; }
 
-  html.light .graph-toolbar,
-  html.light .graph-status,
-  html.light .pop-card {
+  :global(html.light) .graph-toolbar,
+  :global(html.light) .graph-status,
+  :global(html.light) .pop-card {
     --toolbar-glass: rgba(246, 248, 250, 0.72);
   }
 
