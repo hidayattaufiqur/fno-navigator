@@ -57,9 +57,9 @@
   // structured edges (manual + schema), cap 40 rare-first (Q4).
   // Built by a plain function (not an inline IIFE) — rollup's SSR pre-parse
   // chokes on `$: x = (() => { /** @type ... */ ... })()`.
-  function buildStructuredNeighbourhood() {
+  function buildStructuredNeighbourhood(edges) {
     const out = []
-    for (const e of allSigmaEdges) {
+    for (const e of edges) {
       if (e.from === e.to) continue
       // edges carry fields[] as 'Child.childField → Parent.parentField' strings
       for (const f of e.fields ?? []) {
@@ -70,7 +70,7 @@
     }
     return out
   }
-  $: structuredNeighbourhood = buildStructuredNeighbourhood()
+  $: structuredNeighbourhood = buildStructuredNeighbourhood(allSigmaEdges)
 
   $: sigmaSlice = structuredNeighbourhood.length > 0
     ? { nodes: [...new Set(structuredNeighbourhood.flatMap((e) => [e.from, e.to]))].slice(0, 40), mergedEdges: mergeStructuredEdges(structuredNeighbourhood, getSpecificityMap()) }
