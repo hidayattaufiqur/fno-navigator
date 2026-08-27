@@ -1874,6 +1874,19 @@
     gap: 6px;
     flex: 1;
   }
+  /* ── mobile: keep the glass toolbar a single slim swipe row over the canvas ── */
+  @media (max-width: 700px) {
+    .graph-toolbar { flex-wrap: nowrap; }
+    .mod-pills {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      min-width: 0;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+    }
+    .mod-pills::-webkit-scrollbar { display: none; }
+    .mod-pill { flex: 0 0 auto; white-space: nowrap; }
+  }
   .mod-pill {
     display: inline-flex;
     align-items: center;
