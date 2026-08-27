@@ -39,7 +39,7 @@
   const DEPTHS = [
     { scale: 0.55, speed: 0.045, alpha: 0.28, size: 0.5 }, // far
     { scale: 1.0, speed: 0.10, alpha: 0.5, size: 0.7 }, // mid
-    { scale: 1.7, speed: 0.18, alpha: 0.85, size: 1.0 }, // near
+    { scale: 1.7, speed: 0.18, alpha: 0.85, size: 0.45 }, // near — small luminous dust, clearly < node size
   ]
 
   /** @type {Record<string, HTMLCanvasElement>} tone-color → halo sprite */
@@ -128,7 +128,13 @@
 
     const a = s.depth.alpha * (1 + s.amp * Math.sin(s.phase + glow * s.tw * 9)) + boost
     const r = s.size * (1 + boost * 0.8)
-    if (a <= 0.01 || r <= 0.1) return
+    // ponytail: hard cap draw radius so no star (even boosted) reads as a node
+    // blob; sprite multiplier 4 keeps the halo envelope proportional to the
+    // core instead of 8x. Upgrade path: per-tier sprite cache if perf ever
+    // regresses (currently ~140 sprites, cached per tone).
+    const rMax = 0.9
+    const rDraw = Math.min(r, rMax)
+    if (a <= 0.01 || rDraw <= 0.1) return
 
     const base = s.tone === 'warm' ? tv.accent : s.tone === 'blue' ? tv.near : tv.core
     ctx.globalAlpha = a
@@ -136,7 +142,7 @@
     // replaces per-star shadowBlur — the shadow pass is what tanked software
     // rendering at 2x DPR (166ms/frame → ~50ms). Same look, ~3x faster.
     const sprite = haloSprites[base] || (haloSprites[base] = makeHaloSprite(base))
-    const spr = Math.ceil(r * 8)
+    const spr = Math.ceil(rDraw * 4)
     ctx.drawImage(sprite, px - spr, py - spr, spr * 2, spr * 2)
   }
 

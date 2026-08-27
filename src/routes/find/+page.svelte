@@ -1904,6 +1904,7 @@
   .mod-pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--mod-clr, var(--clr-text-faint)); filter: drop-shadow(0 0 3px var(--mod-clr, transparent)); }
   .mod-pill .dot-unknown { background: var(--clr-text-faint); filter: none; }
   .mod-pill.active { color: var(--clr-text); border-color: var(--clr-border-accent); background: var(--mod-clr-bg, rgba(90,148,232,0.08)); }
+  .mod-pill[data-module].active { color: var(--mod-clr, var(--clr-text)); border-color: var(--mod-clr-border, var(--clr-border-accent)); }
   .mod-pill.empty { opacity: 0.45; }
   .toolbar-actions {
     display: flex;
