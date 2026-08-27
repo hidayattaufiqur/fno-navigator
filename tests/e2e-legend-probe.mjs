@@ -98,11 +98,19 @@ page.on('pageerror', (e) => consoleErrors.push(`PAGEERROR: ${e.message}`))
 
 await page.goto(`${BASE}/find`, { waitUntil: 'domcontentloaded' })
 
+// The legend now lives at the results header (DESIGN.md §/find.5: badge
+// explanations move next to "N paths · shortest M hops · sort"). Run a search
+// first so the results view (and its legend) renders.
+await pickTable(page, '#source-input', 'InventTable')
+await pickTable(page, '#target-input', 'CustTable')
+await page.getByRole('button', { name: 'Find paths' }).click()
+await page.waitForSelector('.path-list li', { timeout: 30000 })
+
 // Legend: closed by default, toggles open, dossier content present.
 {
   const summary = page.locator('.legend-summary')
   const details = page.locator('details.legend')
-  if ((await summary.textContent()).trim() !== 'What do these mean?') {
+  if ((await summary.textContent()).trim() !== 'What do badges mean?') {
     fail('legend summary label', JSON.stringify((await summary.textContent()).trim()))
   } else pass('legend summary label')
 
@@ -146,7 +154,7 @@ await page.goto(`${BASE}/find`, { waitUntil: 'domcontentloaded' })
     'deterministic tie-breakers after that',
     'Master → Transaction → Origin → Document Line → Party',
     'pinned canonical example selected by the app team',
-    '5,607-table dataset',
+    '5,587-table dataset',
     'exceeds the selected hop limit',
     'not ranked by the search algorithm',
   ]
@@ -167,6 +175,11 @@ section('legend layout: 3-up desktop / stacked mobile')
 // group cards in DOM order.
 async function legendGroupBoxes(layoutPage) {
   await layoutPage.goto(`${BASE}/find`, { waitUntil: 'domcontentloaded' })
+  // Legend lives at the results header (DESIGN.md §/find.5) — search first.
+  await pickTable(layoutPage, '#source-input', 'InventTable')
+  await pickTable(layoutPage, '#target-input', 'CustTable')
+  await layoutPage.getByRole('button', { name: 'Find paths' }).click()
+  await layoutPage.waitForSelector('.path-list li', { timeout: 30000 })
   await layoutPage.locator('.legend-summary').click()
   await layoutPage.waitForSelector('details.legend[open]', { timeout: 2500 })
   const boxes = []
@@ -244,24 +257,34 @@ const dropFaviconErrors = (list) => list.filter((e) => !e.includes('favicon'))
 section('search 1: InventTable → CustTable (4 hops, unique)')
 await pickTable(page, '#source-input', 'InventTable')
 await pickTable(page, '#target-input', 'CustTable')
-await page.selectOption('.hops-select', '4')
+// Max hops is now a segmented control (DESIGN.md §/find.1)
+await page.locator('.hops-btn', { hasText: '4' }).click()
 await page.getByRole('button', { name: 'Most unique' }).click()
 await page.getByRole('button', { name: 'Find paths' }).click()
 await page.waitForSelector('.path-list li', { timeout: 30000 })
 pass('results rendered')
 
-// Row badges carry tooltip copy.
+// Row badges carry tooltip copy (shortest badge removed by design — DESIGN.md
+// §/find.4: sort mode lives in the header, one badge max per row).
 {
   const badgeCounts = {}
-  for (const sel of ['.shortest-badge', '.cleanest-badge', '.class3-badge', '.curated-badge']) {
+  for (const sel of ['.cleanest-badge', '.class3-badge', '.curated-badge']) {
     const n = await page.locator(sel).count()
     badgeCounts[sel] = n
     const withTip = await page.locator(`${sel}[data-tip]`).count()
     if (n > 0 && withTip !== n) fail(`${sel} missing data-tip (${withTip}/${n})`)
     else if (n > 0) pass(`${sel} present with data-tip (${n})`)
   }
+  if (await page.locator('.shortest-badge').count()) fail('shortest badge removed')
+  else pass('shortest badge removed')
   if (badgeCounts['.class3-badge'] === 0) fail('class3 (Business flow) badge present')
   if (badgeCounts['.cleanest-badge'] === 0) fail('cleanest-path badge present')
+  // One badge max per row: any row with >1 badge fails
+  const multi = await page.evaluate(() =>
+    [...document.querySelectorAll('.path-item')].filter((li) => li.querySelectorAll('.cleanest-badge, .class3-badge, .curated-badge').length > 1).length
+  )
+  if (multi) fail(`one badge max per row (${multi} rows have >1)`)
+  else pass('one badge max per row')
 }
 
 // Reason chips: container concept tooltip + per-code chip tooltips.
@@ -279,13 +302,15 @@ pass('results rendered')
   }
 }
 
-// Header caption tooltip targets.
+// Header caption is now ONE line (DESIGN.md §/find.2): "N paths · shortest M
+// hops · sort mode". The tooltip targets moved into the legend.
 {
-  for (const sel of ['[data-tip="Fewest verified FK hops, independent of business meaning."]',
-    '[data-tip="Class shows quality tier. Score totals weighted evidence."]']) {
-    if (await page.locator(sel).count()) pass(`header caption tooltip target: ${sel.slice(0, 40)}…`)
-    else fail(`header caption tooltip target missing: ${sel}`)
-  }
+  const heading = await page.locator('.results-header .section-heading').textContent()
+  const collapsed = heading.replace(/\s+/g, ' ').trim()
+  const hasSort = collapsed.includes('fewest hops first') || collapsed.includes('ranked by class & score')
+  if (!collapsed.includes('paths') || !collapsed.includes('shortest') || !hasSort) {
+    fail('one-line results header', collapsed)
+  } else pass('one-line results header (paths · shortest · sort)')
 }
 
 // Truncated note (4 hops, unique → 20 of many) with tooltip.
@@ -312,12 +337,10 @@ pass('results rendered')
   if (chipText !== chipCopy) fail('hover reason chip tooltip', `"${chipText}" vs "${chipCopy}"`)
   else pass(`hover reason chip → "${chipCopy}"`)
 
-  // Shortest badge (only when it exists for this pair)
-  if (await page.locator('.shortest-badge').count()) {
-    const text = await hoverAndRead(page, '.shortest-badge')
-    if (text !== 'This path uses the fewest verified FK hops found.') fail('hover shortest tooltip', `"${text}"`)
-    else pass('hover shortest badge tooltip')
-  }
+  // Shortest badge REMOVED by design (DESIGN.md §/find.4: it's the sort mode,
+  // stated in the header). Assert it's gone.
+  if (await page.locator('.shortest-badge').count()) fail('shortest badge removed (sort mode, in header)')
+  else pass('shortest badge removed (sort mode in header)')
 }
 
 // Keyboard focus shows the tooltip; Escape dismisses it.
@@ -355,17 +378,21 @@ section('sort modes')
 await page.getByRole('button', { name: 'Shortest' }).click()
 await page.waitForSelector('.path-list li', { timeout: 30000 })
 {
-  const mini = await page.locator('.results-header .mini').textContent()
-  if (!mini.includes('Fewest hops first')) fail('shortest mode caption', mini.trim())
-  else pass('shortest mode caption')
-  if (await page.locator('.shortest-badge').count()) pass('shortest badge after mode switch')
+  // Sort caption now lives in the single-line results header
+  const heading = await page.locator('.results-header .section-heading').textContent()
+  const collapsed = heading.replace(/\s+/g, ' ').trim()
+  if (!collapsed.includes('fewest hops first')) fail('shortest mode caption', collapsed)
+  else pass('shortest mode caption (in header)')
+  if (await page.locator('.shortest-badge').count()) fail('shortest badge stays removed')
+  else pass('shortest badge stays removed after sort switch')
   if (await page.locator('.cleanest-badge[data-tip]').count()) pass('cleanest badge still tooltipped')
 }
 await page.getByRole('button', { name: 'Most unique' }).click()
 await page.waitForSelector('.path-list li', { timeout: 30000 })
 {
-  const mini = await page.locator('.results-header .mini').textContent()
-  if (!mini.includes('ranked by class & score')) fail('unique mode caption', mini.trim())
+  const heading = await page.locator('.results-header .section-heading').textContent()
+  const collapsed = heading.replace(/\s+/g, ' ').trim()
+  if (!collapsed.includes('ranked by class & score')) fail('unique mode caption', collapsed)
   else pass('unique mode caption (ranked by class & score)')
 }
 
@@ -374,23 +401,11 @@ await page.waitForSelector('.path-list li', { timeout: 30000 })
 section('search 2: InventTable → VendTable (3 hops) — canonical surfaces')
 await pickTable(page, '#source-input', 'InventTable')
 await pickTable(page, '#target-input', 'VendTable')
-await page.selectOption('.hops-select', '3')
+await page.locator('.hops-btn', { hasText: '3' }).click()
 await page.getByRole('button', { name: 'Find paths' }).click()
 await page.waitForSelector('.path-list li', { timeout: 30000 })
 
 {
-  const hint = page.locator('.canonical-hint')
-  if (await hint.count()) {
-    if (!(await hint.getAttribute('data-tip'))) fail('canonical hint data-tip')
-    else pass('canonical hint tooltip target present')
-    const text = await hoverAndRead(page, '.canonical-hint')
-    if (text !== 'A verified canonical path needs more hops than selected.') fail('canonical hint tooltip', `"${text}"`)
-    else pass('canonical hint tooltip copy')
-    await page.mouse.move(0, 0)
-  } else {
-    fail('canonical hint present (expected for InventTable→VendTable at 3 hops)')
-  }
-
   const block = page.locator('.canonical-block')
   if (await block.count()) {
     pass('Known canonical path block present')
@@ -404,6 +419,20 @@ await page.waitForSelector('.path-list li', { timeout: 30000 })
     }
     if (!(await block.locator('.curated-badge[data-tip]').count())) fail('canonical-block curated badge data-tip')
     else pass('canonical-block curated badge tooltip target')
+    // Canonical hint merges into the block caption when the block shows
+    // (DESIGN.md R3: at most one notice). Assert the folded hint is there.
+    const folded = block.locator('.canonical-caption[data-tip]')
+    if (await folded.count()) {
+      const text = await hoverAndRead(page, '.canonical-block .canonical-caption[data-tip]')
+      if (text !== 'A verified canonical path needs more hops than selected.') fail('folded canonical hint tooltip', `"${text}"`)
+      else pass('folded canonical hint tooltip copy (in block caption)')
+      await page.mouse.move(0, 0)
+    } else {
+      fail('folded canonical hint present in block caption (expected: canonical path > 3 hops exists)')
+    }
+    // Standalone hint must NOT appear when the block is showing
+    if (await page.locator('.canonical-hint').count()) fail('standalone canonical hint removed when block shows')
+    else pass('standalone canonical hint removed when block shows')
   } else {
     fail('Known canonical path block present (expected: fixture path exceeds 3 hops)')
   }

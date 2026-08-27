@@ -68,6 +68,9 @@
     <span></span><span></span><span></span>
   </button>
   <span class="mobile-title">FnO Navigator</span>
+  <button class="theme-toggle-mobile" on:click={toggleTheme} aria-label="Toggle theme" title={isLight ? 'Switch to dark mode' : 'Switch to light mode'}>
+    {#if isLight}☾{:else}☀{/if}
+  </button>
 </div>
 
 <!-- Backdrop overlay — click to close sidebar -->
@@ -134,7 +137,7 @@
     <a href="/tables" class="nav-link" class:selected={isTablesPage && !isFindPage}>
       <span class="nav-link-icon">⬡</span>
       <span>Table Reference</span>
-      <span class="nav-link-count">{tableCount}</span>
+      <span class="nav-link-count" title="{tableCount} tables">{tableCount}</span>
     </a>
 
     <a href="/find" class="nav-link" class:selected={isFindPage}>
@@ -153,6 +156,10 @@
 </button>
 
 <style>
+  /* Mobile-only theme toggle inside the top bar (DESIGN.md: move theme
+     toggle INTO the top bar on mobile — it overlapped the TOC pills) */
+  .theme-toggle-mobile { display: none; }
+
   .nav-link-count {
     margin-left: auto;
     font-size: 11px;
@@ -162,7 +169,7 @@
     border-radius: 10px;
   }
 
-  /* Fixed top-right theme toggle */
+  /* Fixed top-right theme toggle (desktop only; mobile uses the top bar) */
   .theme-toggle {
     position: fixed;
     top: 14px;
@@ -187,5 +194,26 @@
   .theme-toggle:hover {
     border-color: var(--clr-border-accent);
     color: var(--clr-text);
+  }
+
+  @media (max-width: 900px) {
+    .theme-toggle { display: none; }
+    .theme-toggle-mobile {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 40px;
+      height: 40px;
+      margin-left: auto;
+      background: var(--clr-surface);
+      border: 1px solid var(--clr-border);
+      border-radius: 6px;
+      color: var(--clr-text-muted);
+      font-size: 16px;
+      cursor: pointer;
+      font-family: inherit;
+      line-height: 1;
+    }
+    .theme-toggle-mobile:hover { color: var(--clr-text); }
   }
 </style>

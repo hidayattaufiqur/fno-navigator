@@ -17,21 +17,45 @@
   color-scheme: dark;
   background: var(--clr-bg);
 
-  /* ── Dark mode defaults ── */
+  /* ── DESIGN.md tokens (muse, b6e7df3) ── */
+  /* Dark mode defaults */
   --clr-bg: #0d1117;
   --clr-bg-nav: #010409;
-  --clr-text: #c0c0c0;
-  --clr-text-muted: #7d8590;
-  --clr-text-faint: #484f58;
-  --clr-blue: #5a94e8;
-  --clr-blue-strong: #7aacf0;
+  --clr-text: #c9d1d9;
+  --clr-text-muted: #8b949e;
+  --clr-text-faint: #6e7681;            /* 4.45:1 vs bg (was 2.28:1) */
+  --clr-blue: #5a94e8;                  /* interaction accent, dark */
+  --clr-blue-strong: #79b8ff;
+  --clr-accent-light: #a0bef0;
+  --clr-accent-light-bg: rgba(90, 148, 232, 0.12);
+  --clr-accent-tint: #23324a;
   --clr-green: #3fb950;
+  --clr-warning: #d29922;
+  --clr-danger: #f85149;
   --clr-surface: #161b22;
   --clr-surface-raised: #1c2128;
   --clr-border-subtle: #21262d;
   --clr-border: #30363d;
   --clr-border-accent: rgba(90, 148, 232, 0.45);
   --dot-color: #1c2128;
+  /* Typography scale (DESIGN.md) */
+  --fs-h1: 28px;
+  --fs-h2: 20px;
+  --fs-body: 14px;
+  --fs-body-sm: 13px;
+  --fs-label: 11px;
+  --fs-code: 13px;
+  --fs-micro: 10px;
+  --fs-stat: 24px;
+  /* Radii (DESIGN.md) */
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-pill: 999px;
+  /* Solid graph-toolbar surfaces (DESIGN.md: no glass in light, solid bar) */
+  --toolbar-bg: #161b22;
+  --toolbar-bd: #30363d;
+  --toolbar-status-bg: rgba(22, 27, 34, 0.92);
   /* Graph edge / node colour tokens */
   --clr-edge-out:       rgba(90, 148, 232, 0.55);
   --clr-edge-out-h:     rgba(90, 148, 232, 0.95);
@@ -45,9 +69,6 @@
   --clr-node-ctr-bd:      rgba(78, 201, 148, 0.95);
   --clr-label-bg:       rgba(10, 14, 20, 0.93);
   --clr-label-bd:       rgba(90, 148, 232, 0.20);
-  --r-sm: 4px;
-  --r-md: 6px;
-  --r-lg: 8px;
   /* M5 constellation backdrop tokens (Starfield.svelte) */
   --clr-star-core:   #dbe7ff;   /* neutral star body */
   --clr-star-halo:   rgba(90, 148, 232, 0.45);
@@ -63,17 +84,26 @@ html.light {
   --clr-bg: #f6f8fa;
   --clr-bg-nav: #ffffff;
   --clr-text: #1c2128;
-  --clr-text-muted: #656d76;
-  --clr-text-faint: #9198a1;
-  --clr-blue: #0969da;
+  --clr-text-muted: #57606a;
+  --clr-text-faint: #656d76;            /* 4.9:1 vs bg (was 2.74:1) */
+  --clr-blue: #0969da;                  /* interaction accent, light */
   --clr-blue-strong: #0550ae;
+  --clr-accent-light: #0969da;
+  --clr-accent-light-bg: rgba(9, 105, 218, 0.1);
+  --clr-accent-tint: rgba(9, 105, 218, 0.12);
   --clr-green: #1a7f37;
+  --clr-warning: #9a6700;
+  --clr-danger: #cf222e;
   --clr-surface: #ffffff;
   --clr-surface-raised: #f6f8fa;
   --clr-border-subtle: #eaeef2;
   --clr-border: #d0d7de;
   --clr-border-accent: rgba(9, 105, 218, 0.4);
   --dot-color: rgba(175, 184, 193, 0.4);
+  /* Solid toolbar in light (DESIGN.md rule 9: no glass) */
+  --toolbar-bg: #ffffff;
+  --toolbar-bd: #d0d7de;
+  --toolbar-status-bg: rgba(255, 255, 255, 0.95);
   /* Graph tokens — darker, more saturated for light bg */
   --clr-edge-out:       rgba(9, 105, 218, 0.55);
   --clr-edge-out-h:     rgba(9, 105, 218, 1.0);
@@ -135,7 +165,7 @@ a:hover {
 
 .page {
   display: grid;
-  grid-template-columns: 280px 1fr;
+  grid-template-columns: 260px 1fr;
   min-height: 100vh;
 }
 
@@ -210,7 +240,7 @@ a:hover {
 }
 
 .hero h2 {
-  font-size: 34px;
+  font-size: var(--fs-h1, 28px);
   margin: 6px 0 8px;
   letter-spacing: -0.6px;
 }
@@ -777,7 +807,7 @@ a.node.active {
   padding-bottom: 8px;
 }
 .home-hero h2 {
-  font-size: 34px;
+  font-size: var(--fs-h1, 28px);
   margin: 6px 0 8px;
   letter-spacing: -0.6px;
 }
@@ -929,16 +959,25 @@ a.node.active {
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 8px;
 }
+/* Fixed-height title row + clamped description (DESIGN.md §/tables:
+   kill wall-of-text variability) */
 .table-browse-item {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
   text-decoration: none;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--clr-surface);
+  border: 1px solid var(--clr-border-subtle);
   padding: 10px 12px;
-  border-radius: 10px;
+  border-radius: var(--r-sm, 6px);
   transition: border-color 0.15s;
+  min-height: 64px;
+}
+.table-browse-item .mini {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 .table-browse-item:hover {
   border-color: var(--clr-border-accent);
@@ -1197,7 +1236,7 @@ a.node.active {
   gap: 1px;
 }
 .stat-num {
-  font-size: 24px;
+  font-size: var(--fs-stat, 24px);
   font-weight: 700;
   color: var(--clr-blue);
   letter-spacing: -0.5px;
@@ -1481,6 +1520,17 @@ a.node.active {
   border-color: var(--mod-clr-border, var(--clr-border-accent));
   color: var(--mod-clr, var(--clr-blue));
 }
+/* Module dot on filter pills (DESIGN.md §/tables: module colors = data,
+   and the pills get the module dot color) */
+.mod-pill .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--mod-clr, var(--clr-text-faint));
+  flex: none;
+}
+.mod-pill[data-module] .dot { background: var(--mod-clr, var(--clr-text-faint)); }
+.mod-pill:not([data-module]) .dot { display: none; }
 
 /* ── Relation direction groups (table detail) ── */
 .rel-direction-section {
@@ -1533,26 +1583,25 @@ a.node.active {
   border-radius: 6px;
 }
 
-/* ── Radius normalization ─────────────────────────────────────────────────────
-   Overrides legacy per-element border-radius values to keep everything
-   consistently sharp. The design is text-forward; decoration is minimal.
+/* ── Radius normalization (DESIGN.md: sm 6 / md 10 / lg 14 / pill) ──────────
+   Overrides legacy per-element border-radius values. The design is
+   text-forward; decoration is minimal. One radius per component.
    ──────────────────────────────────────────────────────────────────────────── */
 
-/* 6px — cards, tables, containers */
+/* md 10px — cards, tables, containers, toolbars */
 .card, .stage-detail, .flow-map, .module-card, .table-result-group,
-.rel-card, .aside-card, .match { border-radius: 6px; }
+.rel-card, .aside-card, .match, .graph-toolbar, .field-table-wrap { border-radius: var(--r-md, 10px); }
 
-/* 5px — nodes, inline items */
+/* sm 6px — nodes, inline items, inputs, small controls */
 .node, a.node, .rel-node, .rel-edge, .pipeline-node,
-.table-browse-item, .inline-rel, .nav-link { border-radius: 5px; }
-
-/* 4px — inputs, small controls, field table wrapper */
+.table-browse-item, .inline-rel, .nav-link, .finder-form,
 select, .search input, .view-toggle, .nav-search input,
-.method-search, .field-table-wrap { border-radius: 4px; }
+.method-search, .swap-btn, .pager-btn, .toc-pills { border-radius: var(--r-sm, 6px); }
 
-/* 4px — tags, badges, filter pills */
-.mod-pill, .cat-pill, .table-chip, .rel-field,
-.flow-list a, .flow-link, .match-reason { border-radius: 4px; }
+/* pill — chips, TOC, module filters */
+.mod-pill, .cat-pill, .toc-pill, .table-chip, .rel-field,
+.flow-list a, .flow-link, .match-reason, .module-badge,
+.trace-link, .graph-status, .status-pill { border-radius: var(--r-pill, 999px); }
 
 /* ── Light mode surface overrides ───────────────────────────────────────────
    rgba(255,255,255,X) overlays become invisible on a light background.

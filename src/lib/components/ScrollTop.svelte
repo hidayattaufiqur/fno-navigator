@@ -43,13 +43,11 @@
     place-items: center;
     border-radius: 50%;
     border: 1px solid var(--clr-border);
-    background: var(--toolbar-glass, rgba(13, 17, 23, 0.72));
+    background: var(--toolbar-bg, rgba(13, 17, 23, 0.72));
     color: var(--clr-text-muted);
     font-size: 18px;
     line-height: 1;
     cursor: pointer;
-    backdrop-filter: blur(14px) saturate(1.3);
-    -webkit-backdrop-filter: blur(14px) saturate(1.3);
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
     opacity: 0;
     transform: translateY(8px);
@@ -59,6 +57,6 @@
   .scroll-top:hover { border-color: var(--clr-border-accent); color: var(--clr-text); }
   .scroll-top.visible { opacity: 1; transform: translateY(0); pointer-events: auto; }
   :global(html.light) .scroll-top {
-    --toolbar-glass: rgba(246, 248, 250, 0.85);
+    /* solid surface in light (DESIGN.md rule 9) — token switches in html.light */
   }
 </style>

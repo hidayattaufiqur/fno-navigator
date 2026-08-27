@@ -68,8 +68,9 @@
   }
 
   .pager-btn {
-    padding: 4px 12px;
-    border-radius: 5px;
+    padding: 8px 14px;
+    min-height: 32px;
+    border-radius: var(--r-sm, 6px);
     border: 1px solid var(--clr-border);
     background: var(--clr-surface-raised);
     color: var(--clr-text);
@@ -77,6 +78,9 @@
     font-family: inherit;
     cursor: pointer;
     transition: border-color 0.15s, background 0.15s, opacity 0.15s;
+  }
+  @media (max-width: 700px) {
+    .pager-btn { min-height: 44px; }
   }
 
   .pager-btn:hover:not(:disabled) {

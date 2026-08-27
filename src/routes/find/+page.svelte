@@ -608,47 +608,6 @@
       <strong>43,584 verified associations</strong> across 5,587 tables — the full Microsoft Dynamics
       database graph.
     </p>
-
-    <!-- Legend: dossier copy (find-legend-copy.md), loaded with the page, no
-         network calls. Real text, keyboard-openable via native details. -->
-    <details class="legend">
-      <summary class="legend-summary">What do these mean?</summary>
-      <div class="legend-body">
-        {#each LEGEND_GROUPS as group}
-          <section class="legend-group">
-            <h3 class="legend-group-heading">{group.heading}</h3>
-            {#each group.sections as section}
-              <div class="legend-section">
-                <h4 class="legend-section-title">{section.title}</h4>
-                {#each section.body as para}
-                  <p>{@html mdInline(para)}</p>
-                {/each}
-                {#if section.table}
-                  <table class="legend-table">
-                    <thead>
-                      <tr>
-                        <th>Code</th>
-                        <th>Current chip text</th>
-                        <th>Plain-language meaning</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {#each section.table as row}
-                        <tr>
-                          <td><code>{row.code}</code></td>
-                          <td>{row.chip}</td>
-                          <td>{row.meaning}</td>
-                        </tr>
-                      {/each}
-                    </tbody>
-                  </table>
-                {/if}
-              </div>
-            {/each}
-          </section>
-        {/each}
-      </div>
-    </details>
   </div>
 </header>
 
@@ -728,15 +687,19 @@
 
     <!-- Options + action -->
     <div class="finder-controls">
-      <label class="hops-label">
-        Max hops
-        <select bind:value={maxHops} class="hops-select">
-          <option value={2}>2</option>
-          <option value={3}>3</option>
-          <option value={4}>4</option>
-          <option value={5}>5</option>
-        </select>
-      </label>
+      <fieldset class="hops-fieldset">
+        <legend class="sort-label">Max hops</legend>
+        <div class="hops-toggle" role="group" aria-label="Max hops">
+          {#each [2, 3, 4, 5] as hops}
+            <button
+              type="button"
+              class="hops-btn"
+              class:hops-active={maxHops === hops}
+              on:click={() => (maxHops = hops)}
+            >{hops}</button>
+          {/each}
+        </div>
+      </fieldset>
 
       <fieldset class="sort-fieldset">
         <legend class="sort-label">Sort</legend>
@@ -802,29 +765,51 @@
         <span class="section-heading">
           {pathResults.length}{truncated ? '+' : ''} path{pathResults.length !== 1 ? 's' : ''}
           from <strong>{sourceTable}</strong> to <strong>{targetTable}</strong>
-        </span>
-        <span class="mini">
           {#if shortestHops !== null}
-            <span
-              class="tip-target"
-              data-tip={TOOLTIP_COPY['shortest-hops']}
-              tabindex="0"
-              aria-describedby="find-tip"
-            >Shortest: <strong>{shortestHops}</strong> hop{shortestHops !== 1 ? 's' : ''}</span>
-            ·
+            · shortest <strong>{shortestHops}</strong> hop{shortestHops !== 1 ? 's' : ''}
           {/if}
-          {#if sortMode === 'shortest'}
-            Fewest hops first
-          {:else}
-            Most unique first (<span
-              class="tip-target"
-              data-tip={TOOLTIP_COPY['ranked-by-class-score']}
-              tabindex="0"
-              aria-describedby="find-tip"
-            >ranked by class &amp; score</span>)
-          {/if}
-          · click a table name to view its reference
+          · {#if sortMode === 'shortest'}fewest hops first{:else}ranked by class &amp; score{/if}
         </span>
+        <!-- Legend: badge explanations next to the results header (DESIGN.md
+             §/find.5) — collapsed by default, dossier copy unchanged. -->
+        <details class="legend">
+          <summary class="legend-summary">What do badges mean?</summary>
+          <div class="legend-body">
+            {#each LEGEND_GROUPS as group}
+              <section class="legend-group">
+                <h3 class="legend-group-heading">{group.heading}</h3>
+                {#each group.sections as section}
+                  <div class="legend-section">
+                    <h4 class="legend-section-title">{section.title}</h4>
+                    {#each section.body as para}
+                      <p>{@html mdInline(para)}</p>
+                    {/each}
+                    {#if section.table}
+                      <table class="legend-table">
+                        <thead>
+                          <tr>
+                            <th>Code</th>
+                            <th>Current chip text</th>
+                            <th>Plain-language meaning</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {#each section.table as row}
+                            <tr>
+                              <td><code>{row.code}</code></td>
+                              <td>{row.chip}</td>
+                              <td>{row.meaning}</td>
+                            </tr>
+                          {/each}
+                        </tbody>
+                      </table>
+                    {/if}
+                  </div>
+                {/each}
+              </section>
+            {/each}
+          </div>
+        </details>
       </div>
 
       {#if truncated}
@@ -837,7 +822,7 @@
       {/if}
     {/if}
 
-    {#if canonicalHint}
+    {#if canonicalHint && canonicalToShow.length === 0}
       <p
         class="finder-note canonical-hint"
         data-tip={TOOLTIP_COPY['canonical-hint']}
@@ -856,6 +841,11 @@
             aria-describedby="find-tip"
           >Known canonical path</span>
           <span class="canonical-caption">Curated knowledge: a verified chain for this pair, pinned from the fixture set — not algorithm-ranked</span>
+          {#if canonicalHint}
+            <span class="canonical-caption" data-tip={TOOLTIP_COPY['canonical-hint']} tabindex="0" aria-describedby="find-tip">
+              · a {canonicalHint.hops}-hop canonical path also exists
+            </span>
+          {/if}
         </div>
         {#each canonicalToShow as c}
           <div class="canonical-path">
@@ -893,38 +883,34 @@
               <p class="mini">The ranked path list below remains fully functional.</p>
             </div>
           </ForceGraph3D>
-          <!-- Glassy toolbar floats over the constellation -->
+          <!-- Solid toolbar pinned to the top of the canvas (DESIGN.md: not
+               floating glass; one module select + switch + hide) -->
           <div class="graph-toolbar" role="toolbar" aria-label="Graph controls">
-            <div class="mod-pills" role="group" aria-label="Filter tables by module">
-              <button
-                class="mod-pill"
-                class:active={graphStateSnap.visibleModules.length === 0}
-                on:click={() => { setAllModules(); syncGraphUrl() }}
-              >All</button>
-              {#each CANONICAL_MODULES as m (m)}
-                {@const c = modCounts[m] ?? 0}
-                <button
-                  class="mod-pill"
-                  class:active={graphStateSnap.visibleModules.includes(m)}
-                  class:empty={c === 0 && graphStateSnap.visibleModules.length === 0}
-                  data-module={m}
-                  on:click={() => toggleMod(m)}
-                ><span class="dot"></span>{m} ({c})</button>
-              {/each}
-              <button
-                class="mod-pill"
-                class:active={graphStateSnap.visibleModules.includes('Unknown')}
-                class:empty={(modCounts.Unknown ?? 0) === 0 && graphStateSnap.visibleModules.length === 0}
-                on:click={() => toggleMod('Unknown')}
-              ><span class="dot dot-unknown"></span>Unknown ({modCounts.Unknown ?? 0})</button>
-            </div>
-            <div class="toolbar-actions">
-              <label class="plumb-toggle">
-                <input type="checkbox" checked={graphStateSnap.showPlumbing} on:change={setPlumbing} />
-                Show system FKs
-              </label>
-              <button class="hide-graph-btn" on:click={disableGraph}>Hide graph</button>
-            </div>
+            <label class="mod-select-label">
+              <span class="mini">Module</span>
+              <select
+                class="mod-select"
+                value={graphStateSnap.visibleModules.length === 0 ? '' : graphStateSnap.visibleModules[0]}
+                on:change={(e) => {
+                  const v = e.currentTarget.value
+                  setAllModules()
+                  if (v) toggleMod(v)
+                  syncGraphUrl()
+                }}
+                aria-label="Filter tables by module"
+              >
+                <option value="">All modules</option>
+                {#each CANONICAL_MODULES as m (m)}
+                  <option value={m}>{m} ({modCounts[m] ?? 0})</option>
+                {/each}
+                <option value="Unknown">Unknown ({modCounts.Unknown ?? 0})</option>
+              </select>
+            </label>
+            <label class="plumb-toggle">
+              <input type="checkbox" checked={graphStateSnap.showPlumbing} on:change={setPlumbing} />
+              Show system FKs
+            </label>
+            <button class="hide-graph-btn" on:click={disableGraph}>Hide graph</button>
           </div>
           <div class="graph-status mini" role="status">
             Showing {slice.nodes.length} of the ranked-path tables{slice.overflow > 0 ? ` · ${slice.overflow} not shown` : ''}
@@ -957,7 +943,6 @@
       <ol class="path-list">
         {#each pathResults as result, i}
           {@const hops = result.steps.length - 1}
-          {@const isShortest = shortestHops !== null && hops === shortestHops}
           {@const pathKey = result.steps.map((s) => s.table).join('>')}
           {@const isCurated = canonicalKeySet.has(pathKey)}
           {@const tieNote = class3TieNote(pathResults, i)}
@@ -975,14 +960,10 @@
                     class:path-target={stepIndex === result.steps.length - 1}
                   >{step.table}</a>
                 {/each}
-                {#if isShortest}
-                  <span
-                    class="shortest-badge"
-                    data-tip={TOOLTIP_COPY.shortest}
-                    tabindex="0"
-                    aria-describedby="find-tip"
-                  >shortest</span>
-                {/if}
+                <!-- One badge max per row (DESIGN.md §/find.4):
+                     rank #1 → cleanest; else one semantic badge (business flow
+                     wins over curated; shortest badge dropped — it's the sort
+                     mode, stated in the header). -->
                 {#if i === cleanestIndex}
                   <span
                     class="cleanest-badge"
@@ -990,16 +971,14 @@
                     tabindex="0"
                     aria-describedby="find-tip"
                   >cleanest path</span>
-                {/if}
-                {#if result.qualityClass === 3}
+                {:else if result.qualityClass === 3}
                   <span
                     class="class3-badge"
                     data-tip={TOOLTIP_COPY['business-flow']}
                     tabindex="0"
                     aria-describedby="find-tip"
                   >Business flow</span>
-                {/if}
-                {#if isCurated}
+                {:else if isCurated}
                   <span
                     class="curated-badge"
                     data-tip={TOOLTIP_COPY.curated}
@@ -1029,9 +1008,6 @@
                 {/if}
                 {#if result.breakdown.plumbing > 0}
                   <span aria-hidden="true"> · </span>{result.breakdown.plumbing} plumbing link{result.breakdown.plumbing !== 1 ? 's' : ''}
-                {/if}
-                {#if hops > 0}
-                  <span aria-hidden="true"> · </span>via {result.steps.slice(1, -1).map((s) => s.table).join(', ')}
                 {/if}
               </div>
               <!-- Class-3 rows: why this ranks here, spelled out instead of a number -->
@@ -1092,8 +1068,10 @@
     flex-wrap: wrap;
     background: var(--clr-surface);
     border: 1px solid var(--clr-border-subtle);
-    border-radius: 12px;
+    border-radius: var(--r-md, 10px);
     padding: 24px;
+    min-width: 0;
+    max-width: 100%;
   }
 
   .table-input-group {
@@ -1102,6 +1080,7 @@
     gap: 6px;
     flex: 1;
     min-width: 180px;
+    max-width: 100%;
   }
 
   .table-input-group label {
@@ -1148,43 +1127,63 @@
     flex-shrink: 0;
   }
 
-  .hops-label {
+  .hops-fieldset {
+    border: none;
+    margin: 0;
+    padding: 0;
     display: flex;
     flex-direction: column;
     gap: 6px;
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.6px;
-    color: var(--clr-text-muted);
   }
 
-  .hops-select {
-    background: var(--clr-surface);
-    color: var(--clr-text);
+  .hops-toggle {
+    display: inline-flex;
     border: 1px solid var(--clr-border);
-    border-radius: 10px;
-    padding: 8px 10px;
-    font-size: 14px;
+    border-radius: var(--r-sm, 6px);
+    overflow: hidden;
+  }
+
+  .hops-btn {
+    background: var(--clr-surface);
+    color: var(--clr-text-muted);
+    border: none;
+    padding: 8px 12px;
+    min-width: 38px;
+    font-size: 13px;
+    font-weight: 600;
     cursor: pointer;
-    color-scheme: inherit;
-    min-width: 64px;
+    transition: background 0.15s, color 0.15s;
+  }
+
+  .hops-btn + .hops-btn {
+    border-left: 1px solid var(--clr-border);
+  }
+
+  .hops-btn:hover:not(.hops-active) {
+    background: var(--clr-surface-raised);
+    color: var(--clr-text);
+  }
+
+  .hops-btn.hops-active {
+    background: var(--clr-accent-light-bg, rgba(90, 148, 232, 0.12));
+    color: var(--clr-blue-strong);
   }
 
   .find-btn {
-    padding: 9px 20px;
-    background: var(--accent, #4fc3f7);
-    color: #fff;
+    padding: 10px 18px;
+    background: var(--clr-blue);
+    color: var(--clr-primary-button-text, #0d1117);
     border: none;
-    border-radius: 7px;
+    border-radius: var(--r-sm, 6px);
     font-size: 14px;
-    font-weight: 600;
+    font-weight: 700;
     cursor: pointer;
-    transition: opacity 0.15s;
+    transition: opacity 0.15s, background 0.15s;
     white-space: nowrap;
+    min-height: 44px;
   }
 
-  .find-btn:hover:not(:disabled) { opacity: 0.85; }
+  .find-btn:hover:not(:disabled) { background: var(--clr-blue-strong); opacity: 1; }
   .find-btn:disabled { opacity: 0.45; cursor: default; }
 
   /* ── Autocomplete ── */
@@ -1311,7 +1310,7 @@
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.6px;
-    color: var(--clr-blue, #4fc3f7);
+    color: var(--clr-text-muted);
   }
 
   .canonical-caption {
@@ -1357,6 +1356,15 @@
     gap: 14px;
     flex-wrap: wrap;
   }
+  .results-header .legend {
+    /* left-anchored block fill (DESIGN.md §/find.5); the width probe asserts
+       the legend fills the content column from the left, capped at 1760px */
+    margin-top: 8px;
+    width: 100%;
+  }
+  @media (min-width: 701px) {
+    .results-header .legend { margin-top: 12px; }
+  }
 
   .path-list {
     list-style: none;
@@ -1370,11 +1378,16 @@
   .path-item {
     background: var(--clr-surface);
     border: 1px solid var(--clr-border-subtle);
-    border-radius: 9px;
+    border-radius: var(--r-md, 10px);
     padding: 10px 14px;
     display: flex;
     align-items: flex-start;
     gap: 10px;
+  }
+
+  /* Rank #1 highlighted with accent border (DESIGN.md §Path rows) */
+  .path-item:first-child {
+    border-color: var(--clr-border-accent);
   }
 
   .path-index {
@@ -1408,30 +1421,16 @@
     flex-shrink: 0;
   }
 
-  .shortest-badge {
-    font-size: 9px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.4px;
-    padding: 1px 6px;
-    border-radius: 4px;
-    background: rgba(76, 175, 80, 0.12);
-    border: 1px solid rgba(76, 175, 80, 0.3);
-    color: var(--clr-green);
-    margin-left: 4px;
-    flex-shrink: 0;
-  }
-
   .cleanest-badge {
     font-size: 9px;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.4px;
     padding: 1px 6px;
-    border-radius: 4px;
-    background: rgba(79, 195, 247, 0.14);
-    border: 1px solid rgba(79, 195, 247, 0.35);
-    color: var(--clr-blue, #4fc3f7);
+    border-radius: var(--r-sm, 6px);
+    background: var(--clr-accent-light-bg, rgba(90, 148, 232, 0.12));
+    border: 1px solid var(--clr-border-accent);
+    color: var(--clr-blue-strong);
     margin-left: 4px;
     flex-shrink: 0;
   }
@@ -1451,18 +1450,18 @@
     flex-shrink: 0;
   }
 
-  /* Editorial badge: fixture-driven curated knowledge, visually distinct
-     from every algorithm-ranked marker (shortest/cleanest/class). */
+  /* Editorial badge: fixture-driven curated knowledge. Semantic success
+     (DESIGN.md: curated purple #ab47bc dropped for contrast — 3.93:1 fail). */
   .curated-badge {
     font-size: 9px;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.4px;
     padding: 1px 6px;
-    border-radius: 4px;
-    background: rgba(171, 71, 188, 0.12);
-    border: 1px solid rgba(171, 71, 188, 0.35);
-    color: #ab47bc;
+    border-radius: var(--r-sm, 6px);
+    background: rgba(63, 185, 80, 0.12);
+    border: 1px solid rgba(63, 185, 80, 0.3);
+    color: var(--clr-green);
     margin-left: 4px;
     flex-shrink: 0;
   }
@@ -1579,8 +1578,8 @@
   }
 
   .sort-btn.sort-active {
-    background: rgba(79, 195, 247, 0.16);
-    color: var(--clr-blue, #4fc3f7);
+    background: var(--clr-accent-light-bg, rgba(90, 148, 232, 0.12));
+    color: var(--clr-blue-strong);
   }
 
   @media (max-width: 900px) {
@@ -1590,7 +1589,8 @@
     }
 
     .finder-arrow { display: none; }
-    .finder-controls { flex-direction: row; justify-content: flex-end; }
+    .finder-controls { flex-direction: row; justify-content: flex-start; flex-wrap: wrap; }
+    .finder-controls .find-btn { flex: 1; min-width: 140px; }
   }
 
   /* ── Loading state ── */
@@ -1694,10 +1694,13 @@
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.6px;
-    color: var(--clr-blue);
+    color: var(--clr-text-muted);
     user-select: none;
     border-radius: 3px;
+    padding: 6px 0;
   }
+
+  .legend-summary:hover { color: var(--clr-text); }
 
   .legend-summary::-webkit-details-marker {
     display: none;
@@ -1707,7 +1710,7 @@
     content: '';
     width: 0;
     height: 0;
-    border-left: 5px solid var(--clr-blue);
+    border-left: 5px solid var(--clr-text-muted);
     border-top: 4px solid transparent;
     border-bottom: 4px solid transparent;
     transition: transform 0.15s;
@@ -1745,7 +1748,7 @@
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.6px;
-    color: var(--clr-blue-strong);
+    color: var(--clr-text-muted);
   }
 
   .legend-section {
@@ -1864,65 +1867,49 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 8px;
-    padding: 8px 10px;
-    /* glassmorphism: frost/d9s-labelled translucent bar over the starfield */
-    background: var(--toolbar-glass, rgba(13, 17, 23, 0.55));
-    border: 1px solid var(--clr-border-subtle);
-    border-radius: var(--r-lg, 8px);
-    backdrop-filter: blur(14px) saturate(1.3);
-    -webkit-backdrop-filter: blur(14px) saturate(1.3);
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
+    gap: 12px;
+    padding: 8px 12px;
+    /* solid bar (DESIGN.md: not floating glass; light mode = solid) */
+    background: var(--toolbar-bg);
+    border: 1px solid var(--toolbar-bd);
+    border-radius: var(--r-md, 10px);
+    box-shadow: var(--elevation-raised, 0 1px 2px rgba(1, 4, 9, 0.4));
   }
-  .mod-pills {
+  .mod-select-label {
     display: flex;
-    flex-wrap: wrap;
+    flex-direction: row;
+    align-items: center;
     gap: 6px;
-    flex: 1;
   }
-  /* ── mobile: keep the glass toolbar a single slim swipe row over the canvas ── */
-  @media (max-width: 700px) {
-    .graph-toolbar { flex-wrap: nowrap; }
-    .mod-pills {
-      flex-wrap: nowrap;
-      overflow-x: auto;
-      min-width: 0;
-      scrollbar-width: none;
-      -ms-overflow-style: none;
-    }
-    .mod-pills::-webkit-scrollbar { display: none; }
-    .mod-pill { flex: 0 0 auto; white-space: nowrap; }
-  }
-  .mod-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    padding: 3px 10px;
-    font-size: 11.5px;
+  .mod-select-label .mini {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
     color: var(--clr-text-muted);
-    background: transparent;
-    border: 1px solid var(--clr-border-subtle);
-    border-radius: 999px;
-    cursor: pointer;
-    transition: border-color 0.12s, color 0.12s, background 0.12s;
   }
-  .mod-pill[data-module] { border-color: var(--mod-clr-border); background: var(--mod-clr-bg); }
-  .mod-pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--mod-clr, var(--clr-text-faint)); filter: drop-shadow(0 0 3px var(--mod-clr, transparent)); }
-  .mod-pill .dot-unknown { background: var(--clr-text-faint); filter: none; }
-  .mod-pill.active { color: var(--clr-text); border-color: var(--clr-border-accent); background: var(--mod-clr-bg, rgba(90,148,232,0.08)); }
-  .mod-pill[data-module].active { color: var(--mod-clr, var(--clr-text)); border-color: var(--mod-clr-border, var(--clr-border-accent)); }
-  .mod-pill.empty { opacity: 0.45; }
-  .toolbar-actions {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-left: auto;
+  .mod-select {
+    background: var(--clr-surface-raised);
+    color: var(--clr-text);
+    color-scheme: inherit;
+    border: 1px solid var(--clr-border);
+    border-radius: var(--r-sm, 6px);
+    padding: 6px 10px;
+    font-size: 13px;
+    min-width: 140px;
+    cursor: pointer;
+  }
+  /* mobile: keep the toolbar a single slim swipe row over the canvas */
+  @media (max-width: 700px) {
+    .graph-toolbar { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none; }
+    .graph-toolbar::-webkit-scrollbar { display: none; }
+    .mod-select { min-width: 120px; }
   }
   .plumb-toggle {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    font-size: 11.5px;
+    font-size: 12px;
     color: var(--clr-text-muted);
     cursor: pointer;
     white-space: nowrap;
@@ -1932,11 +1919,11 @@
   .show-graph-btn {
     background: none;
     border: 1px solid var(--clr-border-subtle);
-    border-radius: var(--r-sm, 4px);
+    border-radius: var(--r-sm, 6px);
     color: var(--clr-text-muted);
     cursor: pointer;
-    font-size: 11.5px;
-    padding: 3px 10px;
+    font-size: 12px;
+    padding: 6px 12px;
     white-space: nowrap;
     transition: color 0.12s, border-color 0.12s;
   }
@@ -1955,11 +1942,9 @@
     padding: 4px 10px;
     font-size: 11px;
     color: var(--clr-text-muted);
-    background: var(--toolbar-glass, rgba(13, 17, 23, 0.55));
-    border: 1px solid var(--clr-border-subtle);
+    background: var(--toolbar-status-bg);
+    border: 1px solid var(--toolbar-bd);
     border-radius: 999px;
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
     pointer-events: none;
   }
   .pop-card {
@@ -1971,12 +1956,10 @@
     gap: 4px;
     min-width: 180px;
     padding: 10px 12px;
-    background: var(--toolbar-glass, rgba(13, 17, 23, 0.75));
+    background: var(--toolbar-bg);
     border: 1px solid var(--clr-label-bd);
-    border-radius: var(--r-md, 6px);
+    border-radius: var(--r-md, 10px);
     box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(90, 148, 232, 0.08);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
     pointer-events: auto;
   }
   .pop-card strong { font-family: inherit; font-size: 13px; color: var(--clr-text); }
@@ -2011,11 +1994,5 @@
     box-shadow: 0 0 12px rgba(90, 148, 232, 0.35);
   }
   .pop-expand:disabled { opacity: 0.4; cursor: default; box-shadow: none; }
-
-  :global(html.light) .graph-toolbar,
-  :global(html.light) .graph-status,
-  :global(html.light) .pop-card {
-    --toolbar-glass: rgba(246, 248, 250, 0.72);
-  }
 
 </style>

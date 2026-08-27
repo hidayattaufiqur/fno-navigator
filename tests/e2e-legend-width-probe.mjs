@@ -45,7 +45,7 @@ let browser = null
 for (const exe of candidates) {
   if (!existsSync(exe)) continue
   try {
-    browser = await chromiumPkg.launch({ executablePath: exe })
+    browser = await chromiumPkg.launch({ executablePath: exe, args: ['--no-sandbox'] })
     console.log(`  (launched chromium: ${exe})`)
     break
   } catch (err) {
@@ -64,6 +64,31 @@ if (!browser) {
 // right edge (the page's usable column, i.e. border-box minus right padding).
 async function measure(page) {
   await page.goto(`${BASE}/find`, { waitUntil: 'domcontentloaded' })
+  // Legend lives at the results header (DESIGN.md §/find.5) — search first.
+  // The Svelte client mounts async; typing before the input's on:input binds
+  // silently fills the DOM value and never triggers the FK-map lazy load, so
+  // no suggestions render. Retry once if the first attempt produced none.
+  await page.waitForSelector('.find-btn', { state: 'visible', timeout: 15000 })
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await page.waitForTimeout(800)
+    await page.click('#source-input')
+    await page.type('#source-input', 'InventTable', { delay: 10 })
+    const ok = await page
+      .locator('.suggestions li')
+      .first()
+      .waitFor({ state: 'visible', timeout: 12000 })
+      .then(() => true)
+      .catch(() => false)
+    if (ok) break
+    await page.evaluate(() => { document.querySelector('#source-input').value = '' })
+  }
+  await page.locator('.suggestions li').first().click()
+  await page.click('#target-input')
+  await page.type('#target-input', 'CustTable', { delay: 10 })
+  await page.locator('.suggestions li').first().waitFor({ state: 'visible', timeout: 30000 })
+  await page.locator('.suggestions li').first().click()
+  await page.getByRole('button', { name: 'Find paths' }).click()
+  await page.waitForSelector('.path-list li', { timeout: 30000 })
   await page.locator('.legend-summary').click()
   await page.waitForSelector('details.legend[open]', { timeout: 2500 })
   return page.evaluate(() => {
@@ -105,10 +130,10 @@ for (const viewport of [
   if (m.gap < 0) {
     fail(`${tag}: legend overflows content column`, `gap=${m.gap}px`)
   } else {
-    // Usable column = viewport − 280px nav − 84px gutters. When it fits under
-    // the 1760px ceiling the legend must fill it (gap ≈ 0); beyond the cap
-    // a gutter is the intended anti-full-bleed behavior.
-    const usable = m.viewportW - 280 - 84
+    // Usable column = viewport − 260px nav (DESIGN.md) − 84px gutters. When it
+    // fits under the 1760px ceiling the legend must fill it (gap ≈ 0); beyond
+    // the cap a gutter is the intended anti-full-bleed behavior.
+    const usable = m.viewportW - 260 - 84
     if (usable <= 1760 && m.gap > 4) {
       fail(`${tag}: unused right margin`, `legend ends ${m.gap}px short of the content column`)
     } else if (usable > 1760 && Math.abs(m.gap - (usable - 1760)) > 2) {

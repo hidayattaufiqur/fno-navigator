@@ -141,7 +141,7 @@
           class:active={moduleFilter === moduleOption}
           data-module={moduleOption !== 'All' ? moduleOption : undefined}
           on:click={() => (moduleFilter = moduleOption)}
-        >{moduleOption}</button>
+        >{#if moduleOption !== 'All'}<span class="dot"></span>{/if}{moduleOption}</button>
       {/each}
     </div>
     <div class="section-heading">

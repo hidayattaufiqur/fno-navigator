@@ -403,14 +403,16 @@
   {#if data.def?.description}
     <p class="lede">{data.def.description}</p>
   {/if}
-  {#if data.def?.docsUrl}
-    <a href={data.def.docsUrl} target="_blank" rel="noreferrer" class="docs-link">
-      Microsoft Learn docs ↗
-    </a>
-  {/if}
-  <div class="trace-links">
-    <a href="/find?from={data.name}" class="trace-link">⇢ Trace paths from {data.name}</a>
-    <a href="/find?to={data.name}" class="trace-link trace-link-secondary">⇠ Trace paths to {data.name}</a>
+  <div class="title-block-row">
+    {#if data.def?.docsUrl}
+      <a href={data.def.docsUrl} target="_blank" rel="noreferrer" class="docs-link">
+        Microsoft Learn docs ↗
+      </a>
+    {/if}
+    <div class="trace-links">
+      <a href="/find?from={data.name}" class="trace-link">⇢ Trace from</a>
+      <a href="/find?to={data.name}" class="trace-link">⇠ Trace to</a>
+    </div>
   </div>
 </header>
 
@@ -429,16 +431,16 @@
         <tbody>
           {#each shownFields as field}
             <tr>
-              <td class="field-name">{field.name}</td>
-              <td class="field-type">{field.type}</td>
-              <td class="field-fk">
+              <td class="field-name" data-label="Field">{field.name}</td>
+              <td class="field-type" data-label="Type">{field.type}</td>
+              <td class="field-fk" data-label="FK / Reference">
                 {#if field.fkTarget}
                   <a href="/tables/{field.fkTarget}">{field.fkTarget}</a>
                 {:else}
                   <span class="mini">—</span>
                 {/if}
               </td>
-              <td>{field.note}</td>
+              <td data-label="Description">{field.note}</td>
             </tr>
           {/each}
         </tbody>
@@ -494,10 +496,13 @@
         </button>
       {/each}
     </div>
-    <label class="common-toggle">
-      <input type="checkbox" bind:checked={showCommonOnly} />
-      Common only
-    </label>
+    <!-- Common-only as a pill toggle in the same row (DESIGN.md §/tables.5) -->
+    <button
+      class="cat-pill common-pill"
+      class:active={showCommonOnly}
+      on:click={() => (showCommonOnly = !showCommonOnly)}
+      title={showCommonOnly ? 'Show all methods' : 'Show common methods only'}
+    >Common only</button>
   </div>
 
   {#if filteredMethods.length === 0}
@@ -587,14 +592,25 @@
             </div>
           </ForceGraph3D>
           <div class="graph-toolbar" role="toolbar" aria-label="Graph controls">
-            <div class="mod-pills" role="group" aria-label="Filter tables by module">
-              <button class="mod-pill" class:active={graphStateSnap.visibleModules.length === 0} on:click={allModules}>All</button>
-              {#each CANONICAL_MODULES as m (m)}
-                {@const c = modCounts[m] ?? 0}
-                <button class="mod-pill" class:active={graphStateSnap.visibleModules.includes(m)} class:empty={c === 0} data-module={m} on:click={() => toggleMod(m)}><span class="dot"></span>{m} ({c})</button>
-              {/each}
-              <button class="mod-pill" class:active={graphStateSnap.visibleModules.includes('Unknown')} on:click={() => toggleMod('Unknown')}><span class="dot dot-unknown"></span>Unknown ({modCounts.Unknown ?? 0})</button>
-            </div>
+            <label class="mod-select-label">
+              <span class="mini">Module</span>
+              <select
+                class="mod-select"
+                value={graphStateSnap.visibleModules.length === 0 ? '' : graphStateSnap.visibleModules[0]}
+                on:change={(e) => {
+                  const v = e.currentTarget.value
+                  allModules()
+                  if (v) toggleMod(v)
+                }}
+                aria-label="Filter tables by module"
+              >
+                <option value="">All modules</option>
+                {#each CANONICAL_MODULES as m (m)}
+                  <option value={m}>{m} ({modCounts[m] ?? 0})</option>
+                {/each}
+                <option value="Unknown">Unknown ({modCounts.Unknown ?? 0})</option>
+              </select>
+            </label>
             <label class="plumb-toggle">
               <input type="checkbox" role="switch" checked={graphStateSnap.showPlumbing} on:change={(e) => setShowPlumbing(e.currentTarget.checked)} />
               Show system FKs
@@ -775,10 +791,12 @@
     background: var(--clr-bg);
     padding: 6px 2px;
     border-radius: 10px;
+    max-width: 100%;
   }
   .toc-pill {
-    padding: 4px 11px;
-    border-radius: 20px;
+    padding: 8px 14px;
+    min-height: 32px;
+    border-radius: var(--r-pill, 999px);
     border: 1px solid var(--clr-border);
     background: var(--clr-surface-raised);
     color: var(--clr-text-muted);
@@ -789,19 +807,62 @@
     white-space: nowrap;
   }
   .toc-pill:hover { border-color: var(--clr-border-accent); color: var(--clr-text); }
-  .toc-pill.active { background: rgba(79,195,247,0.15); border-color: rgba(79,195,247,0.4); color: var(--clr-blue); }
+  .toc-pill.active { background: var(--clr-accent-tint, rgba(79,195,247,0.15)); border-color: var(--clr-border-accent); color: var(--clr-blue-strong); }
   .toc-pill.toc-graph { color: var(--clr-blue); }
   .toc-pill.toc-graph-folded { font-weight: 700; }
   @media (max-width: 700px) {
-    .toc-pills { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none; }
+    .toc-pills {
+      display: flex;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      max-width: 100%;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+    }
     .toc-pills::-webkit-scrollbar { display: none; }
-    .toc-pill { flex: 0 0 auto; }
+    .toc-pill { flex: 0 0 auto; min-height: 44px; }
   }
   /* Mobile sticky TOC sits under the mobile-bar (hamburger bar, sticky top:0) */
   @media (max-width: 900px) {
     .toc-pills { top: calc(var(--mobile-bar-h, 44px) + 8px); }
   }
   :global(html.light) .toc-pill:hover { background: rgba(0,0,0,0.05); }
+
+  /* Mobile: key-fields table → stacked cards (DESIGN.md §/tables.4 —
+     kills the 480px table overflow at 390px viewport). Scoped to the
+     KEY-FIELDS table only; methods/relations tables keep horizontal scroll. */
+  @media (max-width: 700px) {
+    .field-table-wrap:not(:has(table.methods-table)) { overflow: visible; border: none; }
+    .field-table:not(.methods-table) thead { display: none; }
+    .field-table:not(.methods-table) tr {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 2px;
+      background: var(--clr-surface);
+      border: 1px solid var(--clr-border-subtle);
+      border-radius: var(--r-sm, 6px);
+      padding: 10px 12px;
+      margin-bottom: 8px;
+    }
+    .field-table:not(.methods-table) td {
+      display: block;
+      border: none;
+      padding: 1px 0;
+    }
+    .field-table:not(.methods-table) td::before {
+      content: attr(data-label);
+      display: block;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--clr-text-faint);
+      margin-bottom: 1px;
+    }
+    .field-table:not(.methods-table) .field-name { white-space: normal; }
+    .field-table:not(.methods-table) .field-type,
+    .field-table:not(.methods-table) .field-fk a { white-space: normal; word-break: break-word; }
+  }
 
   /* ── Section anchors: scroll target lands below the sticky TOC ────────── */
   /* Sticky band pins at top:60 (below theme toggle) + ~47px tall (35 + 6px pad ×2). */
@@ -811,28 +872,37 @@
     display: flex;
     gap: 10px;
     flex-wrap: wrap;
-    margin-top: 10px;
   }
 
+  .title-block-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-top: 6px;
+  }
+
+  /* Both trace directions share the SAME style (DESIGN.md: drop the
+     green/neutral split — one accent means interaction) */
   .trace-link {
     font-size: 12px;
     font-weight: 600;
-    padding: 5px 12px;
-    border-radius: 6px;
+    padding: 8px 14px;
+    min-height: 36px;
+    border-radius: var(--r-sm, 6px);
     text-decoration: none;
     border: 1px solid var(--clr-border);
     background: var(--clr-surface-raised);
-    color: var(--clr-blue);
-    transition: border-color 0.15s, background 0.15s;
+    color: var(--clr-text);
+    transition: border-color 0.15s, background 0.15s, color 0.15s;
   }
 
   .trace-link:hover {
     border-color: var(--clr-border-accent);
     background: var(--clr-surface-raised);
+    color: var(--clr-blue-strong);
     text-decoration: none;
   }
-
-  .trace-link-secondary { color: var(--clr-green); }
 
   .schema-badge {
     font-size: 10px;
@@ -866,7 +936,7 @@
     font-size: 11px;
     font-weight: 500;
     margin-left: 10px;
-    color: var(--accent, #4fc3f7);
+    color: var(--clr-blue);
     opacity: 0.7;
     text-decoration: none;
   }
@@ -899,7 +969,7 @@
     transition: border-color 0.15s;
   }
   .method-search::placeholder { color: var(--clr-text-faint); }
-  .method-search:focus { border-color: rgba(79, 195, 247, 0.5); }
+  .method-search:focus { border-color: var(--clr-border-accent); }
 
   .method-cat-pills {
     display: flex;
@@ -908,8 +978,9 @@
   }
 
   .cat-pill {
-    padding: 4px 10px;
-    border-radius: 20px;
+    padding: 6px 12px;
+    min-height: 32px;
+    border-radius: var(--r-pill, 999px);
     border: 1px solid var(--clr-border);
     background: transparent;
     color: var(--clr-text-muted);
@@ -918,19 +989,10 @@
     transition: all 0.15s;
   }
   .cat-pill:hover { background: rgba(255,255,255,0.07); color: var(--clr-text); }
-  .cat-pill.active { background: rgba(79,195,247,0.15); border-color: rgba(79,195,247,0.4); color: #4fc3f7; }
+  .cat-pill.active { background: var(--clr-accent-tint, rgba(79,195,247,0.15)); border-color: var(--clr-border-accent); color: var(--clr-blue-strong); }
 
-  .common-toggle {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 12px;
-    color: var(--clr-text-muted);
-    cursor: pointer;
-    user-select: none;
-    margin-left: auto;
-  }
-  .common-toggle input { cursor: pointer; accent-color: #4fc3f7; }
+  /* Common-only pill toggle (DESIGN.md §/tables.5) */
+  .common-pill { margin-left: auto; }
 
   /* Table tweaks for methods */
   .methods-table .method-name-cell {
@@ -1021,7 +1083,7 @@
     transition: all 0.15s;
   }
   .rel-sort-btn:hover { background: rgba(255,255,255,0.07); color: var(--clr-text); }
-  .rel-sort-btn.active { background: rgba(79,195,247,0.15); border-color: rgba(79,195,247,0.4); color: #4fc3f7; }
+  .rel-sort-btn.active { background: var(--clr-accent-tint, rgba(79,195,247,0.15)); border-color: var(--clr-border-accent); color: var(--clr-blue-strong); }
 
   html.light .rel-sort-btn:hover { background: rgba(0,0,0,0.05); }
 
@@ -1033,7 +1095,8 @@
     border-bottom: 1px solid var(--clr-border);
   }
   .graph-tab {
-    padding: 6px 14px;
+    padding: 10px 16px;
+    min-height: 44px;
     border: none;
     background: transparent;
     color: var(--clr-text-muted);
@@ -1061,66 +1124,50 @@
     z-index: 20;
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
     flex-wrap: wrap;
-    padding: 8px 10px;
-    /* glassmorphism over the starfield — same chrome as /find */
-    background: var(--toolbar-glass, rgba(13, 17, 23, 0.55));
-    border: 1px solid var(--clr-border-subtle);
-    border-radius: var(--r-lg, 8px);
-    backdrop-filter: blur(14px) saturate(1.3);
-    -webkit-backdrop-filter: blur(14px) saturate(1.3);
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
+    padding: 8px 12px;
+    /* solid bar (DESIGN.md: not floating glass; light mode = solid) */
+    background: var(--toolbar-bg);
+    border: 1px solid var(--toolbar-bd);
+    border-radius: var(--r-md, 10px);
+    box-shadow: var(--elevation-raised, 0 1px 2px rgba(1, 4, 9, 0.4));
   }
-  .mod-pills {
+  .mod-select-label {
     display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-    flex: 1;
-  }
-  /* ── mobile: keep the glass toolbar a single slim swipe row over the canvas ── */
-  @media (max-width: 700px) {
-    .graph-toolbar { flex-wrap: nowrap; }
-    .mod-pills {
-      flex-wrap: nowrap;
-      overflow-x: auto;
-      min-width: 0;
-      scrollbar-width: none;
-      -ms-overflow-style: none;
-    }
-    .mod-pills::-webkit-scrollbar { display: none; }
-    .mod-pill { flex: 0 0 auto; white-space: nowrap; }
-  }
-  .mod-pill {
-    display: inline-flex;
+    flex-direction: row;
     align-items: center;
-    gap: 5px;
-    padding: 3px 9px;
-    border-radius: 20px;
-    border: 1px solid var(--clr-border);
-    background: transparent;
+    gap: 6px;
+  }
+  .mod-select-label .mini {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
     color: var(--clr-text-muted);
-    font-size: 11px;
-    font-family: inherit;
+  }
+  .mod-select {
+    background: var(--clr-surface-raised);
+    color: var(--clr-text);
+    color-scheme: inherit;
+    border: 1px solid var(--clr-border);
+    border-radius: var(--r-sm, 6px);
+    padding: 6px 10px;
+    font-size: 13px;
+    min-width: 140px;
     cursor: pointer;
-    transition: all 0.15s;
   }
-  .mod-pill:hover { background: rgba(255,255,255,0.07); color: var(--clr-text); }
-  .mod-pill.active { background: rgba(79,195,247,0.12); border-color: rgba(79,195,247,0.4); color: var(--clr-blue-strong); }
-  .mod-pill[data-module].active { background: var(--mod-clr-bg, rgba(79,195,247,0.12)); border-color: var(--mod-clr-border, rgba(79,195,247,0.4)); color: var(--mod-clr, var(--clr-blue-strong)); }
-  .mod-pill .dot {
-    width: 7px; height: 7px; border-radius: 50%;
-    background: var(--clr-blue);
-    flex: none;
+  /* ── mobile: keep the toolbar a single slim swipe row over the canvas ── */
+  @media (max-width: 700px) {
+    .graph-toolbar { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none; }
+    .graph-toolbar::-webkit-scrollbar { display: none; }
+    .mod-select { min-width: 120px; }
   }
-  .mod-pill[data-module] .dot { background: var(--mod-clr, var(--clr-blue)); }
-  .mod-pill .dot-unknown { background: var(--clr-text-faint); }
-  .mod-pill.empty { opacity: 0.45; }
   .plumb-toggle {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    font-size: 11px;
+    font-size: 12px;
     color: var(--clr-text-muted);
     cursor: pointer;
     margin-left: auto;
@@ -1132,11 +1179,9 @@
     z-index: 20;
     padding: 4px 10px;
     color: var(--clr-text-muted);
-    background: var(--toolbar-glass, rgba(13, 17, 23, 0.55));
-    border: 1px solid var(--clr-border-subtle);
+    background: var(--toolbar-status-bg);
+    border: 1px solid var(--toolbar-bd);
     border-radius: 999px;
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
     pointer-events: none;
   }
   .graph-fallback {
@@ -1147,8 +1192,4 @@
     border-radius: 8px;
   }
   :global(html.light) .mod-pill:hover { background: rgba(0,0,0,0.05); }
-  :global(html.light) .graph-toolbar,
-  :global(html.light) .graph-status {
-    --toolbar-glass: rgba(246, 248, 250, 0.72);
-  }
 </style>

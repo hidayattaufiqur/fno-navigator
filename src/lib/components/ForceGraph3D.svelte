@@ -641,11 +641,9 @@
     font-size: 16px;
     line-height: 1;
     color: var(--clr-text-muted, #8ba8d8);
-    background: var(--toolbar-glass, rgba(13, 17, 23, 0.55));
-    border: 1px solid var(--clr-border-subtle, rgba(120, 160, 220, 0.25));
+    background: var(--toolbar-bg, rgba(13, 17, 23, 0.55));
+    border: 1px solid var(--toolbar-bd, rgba(120, 160, 220, 0.25));
     border-radius: var(--r-sm, 6px);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
     cursor: pointer;
     user-select: none;
     -webkit-user-select: none;
@@ -721,21 +719,11 @@
   .sg-chip-plumbing { color: var(--clr-text-faint); border-style: dashed; }
 
   /* ── Light theme: component chrome must flip to light glass ───────────────
-     --toolbar-glass is only defined by the page chrome (.graph-toolbar etc.),
-     never on this component, so .zoom-btn fell back to dark glass while
-     --clr-text-muted resolved to dark text → unreadable. Define it on the
-     component root (inherits to .zoom-btn) + lighten the loading veil and
-     the lib-injected .scene-nav-info (runtime element → :global). */
+     --toolbar-bg is defined globally (app.css), so .zoom-btn inherits the
+     solid surface token in both themes. Light = solid, no glass (DESIGN.md
+     rule 9). */
   :global(html.light) .fg3d-container {
-    --toolbar-glass: rgba(246, 248, 250, 0.72);
-    /* --toolbar-glass is defined on the page chrome (.graph-toolbar etc.) and
-       inherits into the component root only if the component is a DOM child of
-       that chrome — it is NOT (the glass toolbar is a SIBLING of the graph in
-       the pane). The component-root var above covers .zoom-btn/.mini; the
-       find/tables pages additionally set it on their own chrome. Fallback:
-       cover the (unused-in-practice) case where a future page nests the graph
-       inside glass chrome. */
-    --toolbar-glass-page: var(--toolbar-glass, rgba(246, 248, 250, 0.72));
+    /* solid light surfaces; tokens switch in html.light */
   }
   :global(html.light) .mini {
     background: rgba(246, 248, 250, 0.55);

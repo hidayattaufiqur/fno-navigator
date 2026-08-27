@@ -71,7 +71,7 @@
     gap: 7px;
     background: transparent;
     border: none;
-    padding: 0;
+    padding: 8px 10px;
     margin: 0;
     font: inherit;
     font-size: 12px;
@@ -80,14 +80,19 @@
     color: var(--clr-text-muted);
     cursor: pointer;
     text-align: left;
+    min-height: 32px;
+    border-radius: var(--r-sm, 6px);
   }
-  .section-toggle:hover { color: var(--clr-text); }
-  .section-toggle:focus-visible { outline: 2px solid var(--clr-blue); outline-offset: 3px; border-radius: 4px; }
+  @media (max-width: 700px) {
+    .section-toggle { min-height: 44px; }
+  }
+  .section-toggle:hover { color: var(--clr-text); background: var(--clr-surface-raised); }
+  .section-toggle:focus-visible { outline: 2px solid var(--clr-blue); outline-offset: 3px; border-radius: var(--r-sm, 6px); }
   .chev {
     display: inline-block;
     width: 14px;
     flex: none;
-    color: var(--clr-blue);
+    color: var(--clr-text-muted);
     transition: transform 0.15s ease;
   }
   .section-toggle.open .chev { transform: rotate(0deg); }
