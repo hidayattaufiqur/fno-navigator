@@ -5476,20 +5476,21 @@ export const tableDefs: Record<string, TableDef> = {
     ],
   },
 
-  ProdJournalTrans: {
-    name: "ProdJournalTrans",
-    description: "Production journal lines — individual transaction lines within a production journal. In D365FO the physical tables are split by journal subtype: ProdJournalBOM (picking list), ProdJournalRoute (route card), and ProdJournalProd (report-as-finished). The CDM represents ProdJournalProd as 'Production journal transactions'. The docsUrl points to the ProdJournalProd CDM page (RAF lines).",
+  ProdJournalProd: {
+    name: "ProdJournalProd",
+    description: "Report-as-finished (RAF) production journal line — one line of a production journal that posts finished goods (QtyGood) and error/scrap quantities (QtyError) from a production order. Physically the table behind 'Production journal transactions'; sibling journal subtypes are ProdJournalBOM (picking list) and ProdJournalRoute (route card).",
     module: "SupplyChain / ProductionControl / WorksheetLine",
     docsUrl: "https://learn.microsoft.com/common-data-model/schema/core/operationscommon/tables/supplychain/productioncontrol/worksheetline/prodjournalprod",
     fields: [
-      { name: "RecId", type: "int64", note: "" },
-      { name: "JournalId", type: "string", note: "" },
-      { name: "ProdId", type: "string", note: "" },
-      { name: "ItemId", type: "string", note: "" },
-      { name: "QtyGood", type: "decimal", note: "" },
-      { name: "QtyError", type: "decimal", note: "" },
-      { name: "TransDate", type: "date", note: "" },
-      { name: "LineNum", type: "decimal", note: "" },
+      { name: "RecId", type: "Int64", note: "Surrogate primary key; referenced by PdsBatchAttributesInput.RefRecId for batch attribute input on RAF lines" },
+      { name: "JournalId", type: "String", fkTarget: "ProdJournalTable", note: "FK to the production journal header (ProdJournalTable.JournalId)" },
+      { name: "ProdId", type: "String", fkTarget: "ProdTable", note: "FK to the production order being reported as finished" },
+      { name: "ItemId", type: "String", fkTarget: "InventTable", note: "Finished item being reported; must match the production order's finished product" },
+      { name: "InventDimId", type: "String", fkTarget: "InventDim", note: "Inventory dimensions (site/warehouse/batch) for the finished quantity" },
+      { name: "InventTransId", type: "String", fkTarget: "InventTransOrigin", note: "Inventory transaction origin linking this RAF line to its inventory movements" },
+      { name: "LineNum", type: "Decimal", note: "Line sequence within the journal; pairs with JournalError.LineNum for validation errors" },
+      { name: "ProdPickListJournalId", type: "String", fkTarget: "ProdJournalTable", note: "FK back to the picking-list journal header (ProdJournalTable.JournalId) for the BOM consumption that accompanies RAF" },
+      { name: "ReleaseKindId_RU", type: "String", fkTarget: "ProdReleaseKindTable_RU", note: "Russia-specific release kind (per-release posting) — empty outside RU localization" },
     ],
   },
 
