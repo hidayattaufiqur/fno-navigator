@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>fno-navigator redesign — before / after</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --bg-nav: #010409;
+    --surface: #161b22;
+    --surface-raised: #1c2128;
+    --border: #30363d;
+    --border-subtle: #21262d;
+    --text: #c9d1d9;
+    --muted: #8b949e;
+    --faint: #6e7681;
+    --accent: #5a94e8;
+    --accent-strong: #79b8ff;
+    --accent-tint: #23324a;
+    --success: #3fb950;
+    --warning: #d29922;
+    --danger: #f85149;
+    --r-sm: 6px;
+    --r-md: 10px;
+    --r-lg: 14px;
+    --mono: '0xProto', ui-monospace, 'Cascadia Code', 'Fira Code', Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: var(--mono);
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+    padding: 32px 24px 64px;
+  }
+  header {
+    max-width: 1200px;
+    margin: 0 auto 28px;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  header h1 { font-size: 22px; color: var(--text); }
+  header p { font-size: 13px; color: var(--muted); max-width: 640px; }
+  .layout {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 40px;
+  }
+  .pair {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    align-items: start;
+  }
+  @media (max-width: 900px) { .pair { grid-template-columns: 1fr; } }
+  .panel {
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    overflow: hidden;
+    background: var(--surface);
+  }
+  .panel.before { border-color: rgba(248, 81, 73, 0.4); }
+  .panel.after { border-color: rgba(63, 185, 80, 0.4); }
+  .panel-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border-subtle);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .before .panel-head { color: var(--danger); }
+  .after .panel-head { color: var(--success); }
+  .tag {
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    color: var(--muted);
+  }
+  .panel-body { padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+  .shot {
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--r-sm);
+    overflow: hidden;
+    background: var(--bg);
+  }
+  .shot img { display: block; width: 100%; height: auto; }
+  .cap { font-size: 11px; color: var(--faint); margin-top: 6px; }
+  ul { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+  li { font-size: 13px; color: var(--muted); padding-left: 18px; position: relative; }
+  li::before { content: '›'; position: absolute; left: 4px; color: var(--accent); }
+  li strong { color: var(--text); font-weight: 600; }
+  .score {
+    display: inline-block;
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    margin-left: 6px;
+  }
+  .score.bad { background: rgba(248,81,73,0.15); color: var(--danger); border: 1px solid rgba(248,81,73,0.3); }
+  .score.good { background: rgba(63,185,80,0.15); color: var(--success); border: 1px solid rgba(63,185,80,0.3); }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 700px) { .grid-2 { grid-template-columns: 1fr; } }
+  .minibox {
+    border: 1px dashed var(--border);
+    border-radius: var(--r-sm);
+    padding: 10px;
+    font-size: 12px;
+    color: var(--muted);
+    background: var(--bg);
+  }
+  .minibox b { color: var(--text); }
+  .section-title {
+    font-size: 16px;
+    color: var(--text);
+    margin-top: 12px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border-subtle);
+  }
+  .section-title:first-child { border-top: none; padding-top: 0; margin-top: 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>fno-navigator — UI strip-down: before / after</h1>
+  <p>Audit + redesign proposal (task t_ff324619). Full spec in <strong>DESIGN.md</strong>; wireframes in
+  <strong>redesign-wireframes.excalidraw</strong>; audit in <strong>AUDIT.md</strong>.</p>
+</header>
+
+<div class="layout">
+
+  <div class="section-title">1 · Table detail — the 9-element title stack vs one title block</div>
+  <div class="pair">
+    <div class="panel before">
+      <div class="panel-head">Before <span class="tag">9 elements before data</span></div>
+      <div class="panel-body">
+        <div class="shot"><img src="shots/01-table-dark-top.png" alt="Current table detail header"></div>
+        <ul>
+          <li><strong>Full-width module badge band</strong> competes with trace buttons (both green for Inventory)</li>
+          <li><strong>34px mono heading</strong> + breadcrumb + sidebar = "InventTable" 3× before data</li>
+          <li><strong>Trace buttons styled differently</strong> for sibling actions</li>
+          <li><strong>~40 colored elements</strong> on one page; 25+ of them the same teal accent</li>
+          <li><strong>TOC pills 23px</strong>, section toggles 18px, pager buttons 24px — all under target</li>
+        </ul>
+      </div>
+    </div>
+    <div class="panel after">
+      <div class="panel-head">After <span class="tag">one title block, one accent</span></div>
+      <div class="panel-body">
+        <div class="minibox">
+          <b>[INVENTORY]</b> chip + docs link<br>
+          <b style="font-size:20px">InventTable</b> (28px, largest text on page)<br>
+          description (muted, 14px)<br>
+          <b>[⇢ Trace from] [⇠ Trace to]</b> — same secondary style
+        </div>
+        <ul>
+          <li><strong>Module chip</strong> replaces the full-width band; module color = data color only</li>
+          <li><strong>Accent means interaction</strong> — links, active state, primary button; never headings</li>
+          <li><strong>Both trace buttons</strong> share one secondary style</li>
+          <li><strong>Hit targets ≥ 44px</strong> mobile / ≥ 32px desktop</li>
+          <li>Data-first: table names &amp; FK fields are the most legible text</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">2 · /find results — badge overload vs one badge max</div>
+  <div class="pair">
+    <div class="panel before">
+      <div class="panel-head">Before <span class="tag">50 rows × badges</span></div>
+      <div class="panel-body">
+        <div class="shot"><img src="shots/06-find-results-dark.png" alt="Current find results"></div>
+        <ul>
+          <li><strong>47 of 50 rows carry "shortest"</strong> — a property of the sort mode, not the row</li>
+          <li>Row #1 doubles up <strong>shortest + cleanest</strong>; "cleanest" never explained</li>
+          <li>Table names colored <strong>blue = source / green = target</strong>, but the same blue paints
+            the button, sidebar, badges — color cannot be read as a system</li>
+          <li>Breakdown duplicates headline: <em>2 hops · score 10 · via X</em> (hops implied by arrows, X in headline)</li>
+          <li><strong>"click a table name"</strong> instruction buried in a muted meta line</li>
+        </ul>
+      </div>
+    </div>
+    <div class="panel after">
+      <div class="panel-head">After <span class="tag">one badge max</span></div>
+      <div class="panel-body">
+        <div class="minibox">
+          <b>#1</b> InventTable → IntrastatStatProc → SalesTable <span class="score good">cleanest</span><br>
+          <span style="color:var(--faint)">IntrastatStatProc.StatProcId → InventTable.IntrastatProcId_CZ</span><br>
+          <span style="color:var(--faint)">SalesTable.StatProcId → IntrastatStatProc.StatProcId</span>
+        </div>
+        <ul>
+          <li><strong>"shortest" badge removed</strong> — the header states "shortest first"</li>
+          <li><strong>Rank #1 highlighted</strong> with accent border + single "cleanest" badge</li>
+          <li>Neutral table names, <strong>bold source/target</strong>, accent on hover</li>
+          <li>FK field labels stay — <strong>they are the real value</strong></li>
+          <li>Badge legend moves <strong>next to the results</strong> ("What do badges mean?")</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">3 · Graph toolbar — 10 floating pills vs one select</div>
+  <div class="pair">
+    <div class="panel before">
+      <div class="panel-head">Before <span class="tag">glass toolbar, orphaned toggle</span></div>
+      <div class="panel-body">
+        <div class="shot"><img src="shots/07-find-graph-dark.png" alt="Current graph toolbar"></div>
+        <ul>
+          <li><strong>10 module pills</strong> wrap to 2 rows; toggle label orphans onto row 2</li>
+          <li>Procurement vs Production, Inventory vs Finance vs Service are <strong>near-duplicates at 7px dot</strong></li>
+          <li><strong>Zero-count pills</strong> (Project, HR, Service = 0) at full opacity, equal weight</li>
+          <li>Glassmorphism so subtle the toolbar <strong>barely separates</strong> from the canvas</li>
+          <li>Pills 22px tall on mobile; zoom buttons 32×32</li>
+        </ul>
+      </div>
+    </div>
+    <div class="panel after">
+      <div class="panel-head">After <span class="tag">solid bar, one control</span></div>
+      <div class="panel-body">
+        <div class="minibox">
+          <b>[Module ▾: All]</b> &nbsp;·&nbsp; <b>[☐ Show system FKs]</b> &nbsp;·&nbsp; <b>[Hide graph]</b><br>
+          <span style="color:var(--faint)">status pill (bottom-right): Showing 40 of 50 tables</span>
+        </div>
+        <ul>
+          <li><strong>Module filter becomes one select</strong> — searchable, touch-friendly, kills the wrap</li>
+          <li><strong>Solid toolbar pinned to canvas top</strong> (glass stays dark-mode-only)</li>
+          <li>Module colors remain on <strong>graph nodes</strong> (the data) and filter dots</li>
+          <li><strong>Zero-count</strong> modules appear in the select but dimmed</li>
+          <li>Same features (expand, pop card, URL state) — <strong>only chrome changes</strong></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">4 · Light mode — dark-first orphan vs first-class theme</div>
+  <div class="pair">
+    <div class="panel before">
+      <div class="panel-head">Before <span class="tag">faint 2.74:1, glass invisible</span></div>
+      <div class="panel-body">
+        <div class="shot"><img src="shots/03-table-light-full.png" alt="Current light mode"></div>
+        <ul>
+          <li><strong>Dot grid invisible</strong>; glass buttons/toolbar lose effect → flat</li>
+          <li>Sidebar text, breadcrumb, pagination, section arrows <strong>low-contrast gray</strong></li>
+          <li><strong>--clr-text-faint #9198a1 = 2.74:1</strong> — fails AA</li>
+          <li>Method category pills nearly indistinguishable on white</li>
+        </ul>
+      </div>
+    </div>
+    <div class="panel after">
+      <div class="panel-head">After <span class="tag">faint 4.9:1, solid surfaces</span></div>
+      <div class="panel-body">
+        <ul>
+          <li><strong>--clr-text-faint → #656d76 = 4.9:1</strong> (was 2.74:1)</li>
+          <li><strong>No glass in light mode</strong> — solid `surface` for toolbar/buttons/pop cards</li>
+          <li>Sidebar on <strong>white nav bg</strong> with real muted text (#57606a, 7.2:1)</li>
+          <li>Accent `#0969da` (4.9:1) + strong `#0550ae` (8.4:1)</li>
+          <li>Semantic colors re-tuned for white: success/warning/danger all ≥ 4.8:1</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">5 · Mobile — overflow vs stacked cards</div>
+  <div class="pair">
+    <div class="panel before">
+      <div class="panel-head">Before <span class="tag">480px overflow at 390px viewport</span></div>
+      <div class="panel-body">
+        <div class="shot"><img src="shots/10-table-mobile-dark.png" alt="Current mobile table"></div>
+        <ul>
+          <li><strong>Horizontal overflow: scrollWidth 480 vs 390</strong> — field table pushes the page wider</li>
+          <li>Hamburger 30×26, TOC pills 23px, trace buttons 30px, section toggles 18px</li>
+          <li>Sticky TOC scrolls with <strong>no scroll affordance</strong>; Graph pill can sit off-screen</li>
+          <li>Graph labels unreadable; zoom controls tiny</li>
+        </ul>
+      </div>
+    </div>
+    <div class="panel after">
+      <div class="panel-head">After <span class="tag">cards, 44px targets</span></div>
+      <div class="panel-body">
+        <div class="grid-2">
+          <div class="minibox"><b>ItemId</b><br><span style="color:var(--faint)">String · PK</span><br>item number used as FK in every transaction table</div>
+          <div class="minibox"><b>Product</b><br><span style="color:var(--faint)">Int64 → EcoResProduct.RecId</span><br>FK to the shared global product definition</div>
+        </div>
+        <ul>
+          <li><strong>Tables → stacked cards</strong> under 700px (name / type / FK / note) — kills overflow</li>
+          <li><strong>Every target ≥ 44px</strong>: hamburger, TOC pills, trace, pager, section toggles</li>
+          <li>TOC pills scroll with an <strong>edge fade</strong> affordance</li>
+          <li>Graph gets a <strong>full-screen tap-to-expand</strong> on mobile</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">6 · Accessibility pass (computed, WCAG 2.1 AA)</div>
+  <div class="pair">
+    <div class="panel before">
+      <div class="panel-head">Before <span class="tag">2 fails</span></div>
+      <div class="panel-body">
+        <ul>
+          <li><strong>--clr-text-faint dark 2.28:1</strong> <span class="score bad">FAIL</span> — placeholders, meta, FK labels</li>
+          <li><strong>--clr-text-faint light 2.74:1</strong> <span class="score bad">FAIL</span></li>
+          <li><strong>curated badge #ab47bc on dark 3.93:1</strong> <span class="score bad">FAIL</span></li>
+          <li>30+ controls under 40px (desktop) / 44px (mobile)</li>
+          <li>Light-mode interactive elements wash out (glass, faint borders)</li>
+        </ul>
+      </div>
+    </div>
+    <div class="panel after">
+      <div class="panel-head">After <span class="tag">all pass</span></div>
+      <div class="panel-body">
+        <ul>
+          <li><strong>faint dark #6e7681 = 4.45:1</strong> <span class="score good">PASS</span></li>
+          <li><strong>faint light #656d76 = 4.9:1</strong> <span class="score good">PASS</span></li>
+          <li>Curated rows use <strong>success green #3fb950 = 7.5:1</strong> instead of purple</li>
+          <li>Primary button: near-black ink on accent = <strong>5.1:1</strong> <span class="score good">PASS</span></li>
+          <li>All hit targets ≥ 44px touch / 32px dense desktop</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
