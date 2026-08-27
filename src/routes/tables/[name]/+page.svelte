@@ -928,11 +928,13 @@
   }
   .mod-pill:hover { background: rgba(255,255,255,0.07); color: var(--clr-text); }
   .mod-pill.active { background: rgba(79,195,247,0.12); border-color: rgba(79,195,247,0.4); color: var(--clr-blue-strong); }
+  .mod-pill[data-module].active { background: var(--mod-clr-bg, rgba(79,195,247,0.12)); border-color: var(--mod-clr-border, rgba(79,195,247,0.4)); color: var(--mod-clr, var(--clr-blue-strong)); }
   .mod-pill .dot {
     width: 7px; height: 7px; border-radius: 50%;
     background: var(--clr-blue);
     flex: none;
   }
+  .mod-pill[data-module] .dot { background: var(--mod-clr, var(--clr-blue)); }
   .mod-pill .dot-unknown { background: var(--clr-text-faint); }
   .mod-pill.empty { opacity: 0.45; }
   .plumb-toggle {
