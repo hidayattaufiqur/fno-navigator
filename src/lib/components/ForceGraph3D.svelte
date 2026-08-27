@@ -227,7 +227,7 @@
   }
 
   // ── hover: light direct connections, dim the rest ────────────────────────
-  function applyHover(hovered) {
+  function applyHover(hovered, showPlumbing = $graphState.showPlumbing) {
     hoveredId = hovered
     if (!Graph || !nodeObjs.size) return
     const neighbors = new Set()
@@ -259,7 +259,8 @@
         obj.core.scale.setScalar(0.85)
       }
     }
-    const showPlumbing = $graphState.showPlumbing
+    // NOTE: showPlumbing passed in from the caller (applyVisibility) — the $
+    // prefix read here would be stale inside the subscribe path (bug #2 family)
     for (const { lineMat, source, target, link } of linkObjs.values()) {
       const lit = !hovered || source === hovered || target === hovered
       if (link.isPlumbing && !showPlumbing) {
@@ -393,7 +394,12 @@
     visHandler = () => setAnimPaused(document.hidden)
     document.addEventListener('visibilitychange', visHandler)
 
-    unsubscribeState = graphState.subscribe(() => applyVisibility())
+    // NOTE: pass the store VALUE into applyVisibility — reading $graphState
+    // inside the subscribe callback reads the component's bound store which
+    // Svelte 5 legacy flushes AFTER the synchronous callback, so it always
+    // saw the OLD visibleModules (bug #2: Sales pill highlighted but ALL
+    // nodes stayed visible). The subscribe callback's first arg IS the value.
+    unsubscribeState = graphState.subscribe((s) => applyVisibility(s))
 
     phase = 'ready'
     prevSig = sliceSig()
@@ -410,9 +416,10 @@
   }
 
   // ── visibility from graphState (module pills + plumbing toggle) ──────────
-  function applyVisibility() {
+  // s comes from the subscribe callback's value (never $graphState — the $
+  // prefix reads a bound store that flushes AFTER sync callbacks, bug #2).
+  function applyVisibility(s) {
     if (!Graph) return
-    const s = $graphState
     Graph.nodeVisibility((n) => s.visibleModules.length === 0 || s.visibleModules.includes(n.module))
     Graph.linkVisibility((l) => {
       const vis = s.visibleModules.length === 0 ||
@@ -420,7 +427,7 @@
       if (!vis) return false
       return !(l.isPlumbing && !s.showPlumbing)
     })
-    applyHover(hoveredId) // re-tint lines after visibility change
+    applyHover(hoveredId, s.showPlumbing) // re-tint lines after visibility change
   }
 
   // ── edge tooltip (Q6) — canvas-space mid-link ─────────────────────────────

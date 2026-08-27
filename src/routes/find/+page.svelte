@@ -122,7 +122,10 @@
       return
     }
     sp.set('graph', '1')
-    const snap = graphStateSnap
+    // NOTE: read $graphState directly, NOT the $: derived graphStateSnap —
+    // deriveds flush AFTER the sync click handler, so reading them here would
+    // serialize the PRE-toggle visibleModules/expandedSet (2e6abc5 family).
+    const snap = $graphState
     const ex = [...snap.expandedSet]
     ex.length ? sp.set('expand', ex.join(',')) : sp.delete('expand')
     const mods = snap.visibleModules
