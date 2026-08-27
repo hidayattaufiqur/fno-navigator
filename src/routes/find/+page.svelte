@@ -11,6 +11,7 @@
   import { goto } from '$app/navigation'
   // ── M2 graph pane (TDD §4.1) ─────────────────────────────────────────────
   import ForceGraph3D from '$lib/components/ForceGraph3D.svelte'
+  import ScrollTop from '$lib/components/ScrollTop.svelte'
   import { selectSlice, mergeStructuredEdges } from '$lib/graph/selectSlice'
   import { getForwardMap, getReverseMap } from '$lib/stores/fkMap'
   import { getSpecificityMap } from '$lib/stores/specificity'
@@ -1073,6 +1074,8 @@
     >{tipText}</div>
   {/if}
 </section>
+
+<ScrollTop />
 
 <style>
   /* ── Form layout ── */

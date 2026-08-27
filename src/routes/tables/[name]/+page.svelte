@@ -9,6 +9,7 @@
   import { getSpecificityMap, loadSpecificity } from '$lib/stores/specificity'
   import { COMMON_METHODS, METHOD_CATEGORIES } from '$lib/data/tableMethods'
   import ForceGraph3D from '$lib/components/ForceGraph3D.svelte'
+  import ScrollTop from '$lib/components/ScrollTop.svelte'
   import { mergeStructuredEdges } from '$lib/graph/selectSlice'
   import { graphState, CANONICAL_MODULES, toggleModule, setAllModules, setShowPlumbing, hydrateFromParams } from '$lib/stores/graphState'
   import { goto } from '$app/navigation'
@@ -72,6 +73,7 @@
   onMount(() => {
     hydrateTab()
     window.addEventListener('popstate', onPopState)
+    initSpy()
     return () => window.removeEventListener('popstate', onPopState)
   })
 
@@ -189,6 +191,39 @@
     { id: 'graph', label: 'Graph' },
   ]
 
+  // ── TOC scroll-spy (UX #2 round 2) ──────────────────────────────────────
+  // Classic monotonic spy: on scroll, the active pill is the LAST section
+  // whose top has crossed a reference line just below the sticky TOC.
+  // (IntersectionObserver "topmost intersecting" flapped on the tall Graph
+  //  section mid-page; scroll+rect is stable and handles smooth-jump clicks.)
+  let activeSection = 'keyfields'
+  let spyTicking = false
+
+  function spy() {
+    if (spyTicking) return
+    spyTicking = true
+    requestAnimationFrame(() => {
+      spyTicking = false
+      const ref = 120 // sections land at ~112-118 after a jump (scroll-margin 112); ref just below that so the spy agrees with the click target
+      let current = null
+      // Iterate in DOM order — the Graph section physically sits BETWEEN
+      // Methods and Relations in the markup, so TOC_ITEMS order would make
+      // Graph win once crossed (the original "only graph highlighted" bug).
+      const sections = document.querySelectorAll('.detail-section')
+      for (const el of sections) {
+        if (!el.id.startsWith('section-')) continue
+        if (el.getBoundingClientRect().top <= ref) current = el.id.replace('section-', '')
+      }
+      if (current && current !== activeSection) activeSection = current
+    })
+  }
+
+  function initSpy() {
+    if (typeof window === 'undefined') return
+    window.addEventListener('scroll', spy, { passive: true })
+    spy()
+  }
+
   function reducedMotion() {
     return typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
   }
@@ -196,6 +231,7 @@
   function jumpTo(sectionId) {
     const el = document.getElementById(`section-${sectionId}`)
     if (!el) return
+    activeSection = sectionId // immediate pill feedback (click = explicit nav)
     if (sectionId === 'graph' && graphSection) graphSection.expand()
     // tick lets the expanded body render before we measure the target
     tick().then(() => {
@@ -343,7 +379,8 @@
   {#each TOC_ITEMS as item (item.id)}
     <button
       class="toc-pill"
-      class:toc-graph={item.id === 'graph'}
+      class:active={activeSection === item.id}
+      class:toc-graph={item.id === 'graph' && activeSection === 'graph'}
       class:toc-graph-folded={item.id === 'graph' && graphCollapsed}
       on:click={() => jumpTo(item.id)}
     >
@@ -351,6 +388,8 @@
     </button>
   {/each}
 </nav>
+
+<ScrollTop />
 
 <header class="table-def-header" data-module={mod}>
   {#if mod}
@@ -727,7 +766,10 @@
     flex-wrap: wrap;
     margin: 14px 0 4px;
     position: sticky;
-    top: 12px;
+    /* Pin BELOW the fixed theme toggle (top 14 + 32px height = 46) so the band
+       can never run under it — a right-margin can't clear it because the
+       content column overflows the viewport on some widths. */
+    top: 60px;
     z-index: 30;
     background: var(--clr-bg);
     padding: 6px 2px;
@@ -746,6 +788,7 @@
     white-space: nowrap;
   }
   .toc-pill:hover { border-color: var(--clr-border-accent); color: var(--clr-text); }
+  .toc-pill.active { background: rgba(79,195,247,0.15); border-color: rgba(79,195,247,0.4); color: var(--clr-blue); }
   .toc-pill.toc-graph { color: var(--clr-blue); }
   .toc-pill.toc-graph-folded { font-weight: 700; }
   @media (max-width: 700px) {
@@ -760,7 +803,8 @@
   :global(html.light) .toc-pill:hover { background: rgba(0,0,0,0.05); }
 
   /* ── Section anchors: scroll target lands below the sticky TOC ────────── */
-  :global(.detail-section) { scroll-margin-top: 64px; }
+  /* Sticky band pins at top:60 (below theme toggle) + ~47px tall (35 + 6px pad ×2). */
+  :global(.detail-section) { scroll-margin-top: 112px; }
 
   .trace-links {
     display: flex;
@@ -964,12 +1008,12 @@
     margin-right: 4px;
   }
   .rel-sort-btn {
-    padding: 4px 10px;
+    padding: 2px 9px;
     border-radius: 20px;
     border: 1px solid var(--clr-border);
     background: transparent;
     color: var(--clr-text-muted);
-    font-size: 12px;
+    font-size: 11px;
     font-family: inherit;
     cursor: pointer;
     transition: all 0.15s;
