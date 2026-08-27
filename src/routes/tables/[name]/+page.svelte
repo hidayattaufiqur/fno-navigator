@@ -1,7 +1,8 @@
 <script>
-  import { onMount } from 'svelte'
+  import { onMount, tick } from 'svelte'
   import RelationGraph from '$lib/components/RelationGraph.svelte'
   import Pager from '$lib/components/Pager.svelte'
+  import SectionToggle from '$lib/components/SectionToggle.svelte'
   import { canonicalModule } from '$lib/utils'
   import { flows, tableDefs } from '$lib/data/flows'
   import { fkLoadState, loadFkMap, getSchemaEdgesForTable } from '$lib/stores/fkMap'
@@ -9,8 +10,9 @@
   import { COMMON_METHODS, METHOD_CATEGORIES } from '$lib/data/tableMethods'
   import ForceGraph3D from '$lib/components/ForceGraph3D.svelte'
   import { mergeStructuredEdges } from '$lib/graph/selectSlice'
-  import { graphState, CANONICAL_MODULES, toggleModule, setAllModules, setShowPlumbing } from '$lib/stores/graphState'
+  import { graphState, CANONICAL_MODULES, toggleModule, setAllModules, setShowPlumbing, hydrateFromParams } from '$lib/stores/graphState'
   import { goto } from '$app/navigation'
+  import { syncGraphUrl } from '$lib/graphUrl'
 
   // @type {import('./$types').PageData}
   export let data
@@ -46,12 +48,75 @@
   // ── M3: List | Graph tabs (Q13 verbatim: Sigma after 24, SVG fallback) ─────
   // Tabs are per-page state; the Graph tab's default is SVG when the slice is
   // small. `?graph=1` forces the Sigma tab open on load (shareable).
+  //
+  // URL is the single source of truth for graph/modules (grill Q12 lock):
+  //  - load + popstate re-hydrate activeTab + visibleModules from the URL
+  //  - clicks mutate the store, then syncGraphUrl() (shared helper) writes
+  //    the URL via history.replaceState (NOT pushState — see locked decision)
+  //
+  // Svelte 5 legacy `$:` timing trap (2e6abc5 family): `graphOn` flushes
+  // AFTER the synchronous click handler, so syncGraphUrl MUST NOT read a
+  // reactive derived value synchronously — the shared helper takes explicit
+  // state args; setTab waits a microtask (tick) before syncing so the
+  // written URL matches the clicked tab, never its opposite.
   let activeTab = 'list' // 'list' | 'graph'
-  onMount(() => {
-    const sp = new URLSearchParams(location.search)
-    if (sp.get('graph') === '1') activeTab = 'graph'
-  })
+  let graphOn = false
   $: graphOn = activeTab === 'graph'
+
+  function hydrateTab() {
+    const sp = new URLSearchParams(location.search)
+    activeTab = sp.get('graph') === '1' ? 'graph' : 'list'
+    hydrateFromParams(sp) // visibleModules from ?modules= ([] = All)
+  }
+
+  onMount(() => {
+    hydrateTab()
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  })
+
+  // SvelteKit reuses this component across /tables/A → /tables/B (no remount),
+  // so re-hydrate from the URL whenever the table changes (acceptance #4:
+  // back from B to A must restore A's graph/tab state, not just remount).
+  $: if (data.name && typeof window !== 'undefined') {
+    const sp = new URLSearchParams(location.search)
+    // Only react to param-driven navigations where the URL actually changed
+    // for THIS table; on first mount onMount() already hydrated.
+    if (sp.get('graph') === '1' ? activeTab !== 'graph' : activeTab !== 'list') {
+      activeTab = sp.get('graph') === '1' ? 'graph' : 'list'
+    }
+    hydrateFromParams(sp)
+  }
+
+  // Back/forward: URL changed under us → re-hydrate tab + module pills.
+  // (replaceState doesn't fire popstate, so this fires only on real
+  //  navigation — exactly what we want; no double history entries.)
+  function onPopState() {
+    hydrateTab()
+  }
+
+  // ── URL loop (Q12). Pager stays transient. ───────────────────────────────
+  // Explicit-state sync: `graphOn`/`graphStateSnap` are $: deriveds that flush
+  // AFTER the synchronous click handler, so reading them here would write the
+  // OPPOSITE/stale state (the 2e6abc5 family of bug). We pass the tab we just
+  // set and read the STORE directly ($graphState reads the current value
+  // synchronously; writable.update applies synchronously).
+  function syncUrl(nextTab) {
+    syncGraphUrl({ graph: nextTab === 'graph', modules: $graphState.visibleModules })
+  }
+  function setTab(t) {
+    if (t === activeTab) return
+    activeTab = t
+    syncUrl(t)
+  }
+  function toggleMod(m) {
+    toggleModule(m) // store update is synchronous
+    syncUrl(activeTab)
+  }
+  function allModules() {
+    setAllModules() // store update is synchronous
+    syncUrl(activeTab)
+  }
 
   // Sigma neighbourhood slice: centre = current table, satellites = merged
   // structured edges (manual + schema), cap 40 rare-first (Q4).
@@ -93,17 +158,50 @@
   }
 
   // URL loop: `?graph=1&modules=...` on toggle (Q12). Pager stays transient.
-  function syncGraphUrl() {
-    const sp = new URLSearchParams(location.search)
-    if (!graphOn) { sp.delete('graph'); sp.delete('modules') }
-    else {
-      sp.set('graph', '1')
-      const mods = graphStateSnap.visibleModules
-      mods.length && mods.length < CANONICAL_MODULES.length ? sp.set('modules', mods.join(',')) : sp.delete('modules')
-    }
-    history.replaceState(null, '', `${location.pathname}?${sp.toString()}`)
+  // NOTE: the old syncGraphUrl() here read `$: graphOn` synchronously — Svelte
+  // 5 legacy `$:` flushes AFTER the sync block, so it always wrote the
+  // OPPOSITE of the clicked tab. Replaced by syncUrl() + shared helper above
+  // (explicit state args; see graphUrl.js). Deleted on 2026-08-27.
+
+  // ── Collapsible sections + pill TOC (UX #5) ──────────────────────────────
+  // Collapse state per table in localStorage (one key, comma-separated ids).
+  // Graph section toggle lives in SectionToggle.svelte; jump-to-graph also
+  // expands it when the user folded it (fold then jump).
+  let graphSection
+
+  function collapsedIds() {
+    try {
+      return (localStorage.getItem(`fno:tables:collapsed:${data.name}`) ?? '').split(',').filter(Boolean)
+    } catch { return [] }
   }
-  function setTab(t) { activeTab = t; syncGraphUrl() }
+  // Reactive re-read: SectionToggle's onToggle callback bumps this so the TOC
+  // Graph pill ▸ indicator tracks the live fold state (localStorage alone is
+  // not reactive).
+  let collapseRev = 0
+  $: graphCollapsed = (collapseRev, collapsedIds().includes('graph'))
+  function onGraphToggle() { collapseRev += 1 }
+
+  const TOC_ITEMS = [
+    { id: 'keyfields', label: 'Key fields' },
+    { id: 'methods', label: 'Table Methods' },
+    { id: 'relations', label: 'Relations' },
+    { id: 'schema', label: 'Schema FK' },
+    { id: 'graph', label: 'Graph' },
+  ]
+
+  function reducedMotion() {
+    return typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  }
+
+  function jumpTo(sectionId) {
+    const el = document.getElementById(`section-${sectionId}`)
+    if (!el) return
+    if (sectionId === 'graph' && graphSection) graphSection.expand()
+    // tick lets the expanded body render before we measure the target
+    tick().then(() => {
+      el.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'start' })
+    })
+  }
   function onSigmaNodeClick(e) {
     const t = e?.table ?? e?.node ?? e
     if (t && t !== data.name) goto('/tables/' + t)
@@ -241,6 +339,19 @@
   <span>{data.name}</span>
 </div>
 
+<nav class="toc-pills" aria-label="Table sections">
+  {#each TOC_ITEMS as item (item.id)}
+    <button
+      class="toc-pill"
+      class:toc-graph={item.id === 'graph'}
+      class:toc-graph-folded={item.id === 'graph' && graphCollapsed}
+      on:click={() => jumpTo(item.id)}
+    >
+      {item.id === 'graph' && graphCollapsed ? '▸' : ''}{item.label}
+    </button>
+  {/each}
+</nav>
+
 <header class="table-def-header" data-module={mod}>
   {#if mod}
     <span class="module-badge" data-module={mod} title={data.def?.module}>{mod}</span>
@@ -265,8 +376,7 @@
 </header>
 
 {#if data.def?.fields?.length}
-  <section class="detail-section">
-    <div class="section-heading">Key fields ({allFields.length})</div>
+  <SectionToggle table={data.name} sectionId="keyfields" heading={`Key fields (${allFields.length})`}>
     <div class="field-table-wrap">
       <table class="field-table sortable-table">
         <thead>
@@ -302,7 +412,7 @@
       onPrev={() => (fieldPage -= 1)}
       onNext={() => (fieldPage += 1)}
     />
-  </section>
+  </SectionToggle>
 {:else}
   <div class="card no-def-notice">
     <div class="card-label">Field definitions</div>
@@ -313,16 +423,14 @@
   </div>
 {/if}
 
-<section class="detail-section">
-  <div class="section-heading">
-    Table Methods ({filteredMethods.length})
-    <a
-      href="https://learn.microsoft.com/dynamics365/fin-ops-core/dev-itpro/dev-ref/system-tables#common"
-      target="_blank"
-      rel="noreferrer"
-      class="section-docs-link"
-    >Common docs ↗</a>
-  </div>
+<SectionToggle table={data.name} sectionId="methods" heading={`Table Methods (${filteredMethods.length})`} docsLink>
+  <a
+    slot="docs"
+    href="https://learn.microsoft.com/dynamics365/fin-ops-core/dev-itpro/dev-ref/system-tables#common"
+    target="_blank"
+    rel="noreferrer"
+    class="section-docs-link"
+  >Common docs ↗</a>
   <p class="mini methods-note">
     Inherited by every D365FO table from <code>Common</code>/<code>xRecord</code>. Static methods
     (<code>find</code>, <code>exist</code>, <code>findRecId</code>) are a near-universal convention
@@ -395,14 +503,11 @@
       onNext={() => (methodPage += 1)}
     />
   {/if}
-</section>
+</SectionToggle>
 
 {#if allEdges.length > 0}
-  <section class="detail-section">
-    <div class="section-heading">
-      Relation graph — {data.relationsUsing.length} documented{dedupedSchemaEdges.length > 0 ? ` + ${dedupedSchemaEdges.length} schema FK` : ''}
-      {#if $fkLoadState === 'loading'}<span class="mini" style="margin-left:8px;opacity:0.5">loading schema…</span>{/if}
-    </div>
+  <SectionToggle bind:this={graphSection} onToggle={onGraphToggle} table={data.name} sectionId="graph" heading={`Relation graph — ${data.relationsUsing.length} documented${dedupedSchemaEdges.length > 0 ? ` + ${dedupedSchemaEdges.length} schema FK` : ''}`}>
+    {#if $fkLoadState === 'loading'}<span class="mini" style="margin-left:8px;opacity:0.5">loading schema…</span>{/if}
 
     <!-- M3: List | Graph tabs (Q13). List = SVG orbit (unchanged, ≤24 fast path);
          Graph = Sigma neighbourhood (40 cap, pills + plumbing toggle). -->
@@ -444,12 +549,12 @@
           </ForceGraph3D>
           <div class="graph-toolbar" role="toolbar" aria-label="Graph controls">
             <div class="mod-pills" role="group" aria-label="Filter tables by module">
-              <button class="mod-pill" class:active={graphStateSnap.visibleModules.length === 0} on:click={setAllModules}>All</button>
+              <button class="mod-pill" class:active={graphStateSnap.visibleModules.length === 0} on:click={allModules}>All</button>
               {#each CANONICAL_MODULES as m (m)}
                 {@const c = modCounts[m] ?? 0}
-                <button class="mod-pill" class:active={graphStateSnap.visibleModules.includes(m)} class:empty={c === 0} data-module={m} on:click={() => toggleModule(m)}><span class="dot"></span>{m} ({c})</button>
+                <button class="mod-pill" class:active={graphStateSnap.visibleModules.includes(m)} class:empty={c === 0} data-module={m} on:click={() => toggleMod(m)}><span class="dot"></span>{m} ({c})</button>
               {/each}
-              <button class="mod-pill" class:active={graphStateSnap.visibleModules.includes('Unknown')} on:click={() => toggleModule('Unknown')}><span class="dot dot-unknown"></span>Unknown ({modCounts.Unknown ?? 0})</button>
+              <button class="mod-pill" class:active={graphStateSnap.visibleModules.includes('Unknown')} on:click={() => toggleMod('Unknown')}><span class="dot dot-unknown"></span>Unknown ({modCounts.Unknown ?? 0})</button>
             </div>
             <label class="plumb-toggle">
               <input type="checkbox" role="switch" checked={graphStateSnap.showPlumbing} on:change={(e) => setShowPlumbing(e.currentTarget.checked)} />
@@ -465,15 +570,11 @@
         <RelationGraph tableName={data.name} relations={allEdges} />
       {/if}
     {/if}
-  </section>
+  </SectionToggle>
 {/if}
 
 {#if outgoing.length > 0 || incoming.length > 0}
-  <section class="detail-section">
-    <div class="section-heading">
-      Table relations — documented ({data.relationsUsing.length})
-    </div>
-
+  <SectionToggle table={data.name} sectionId="relations" heading={`Table relations — documented (${data.relationsUsing.length})`}>
     <div class="rel-sort-bar" role="group" aria-label="Sort relations">
       <span class="rel-sort-label">Sort</span>
       <button class="rel-sort-btn" class:active={relSortKey === 'from'} on:click={() => setRelSort('from')}>From{relSortKey === 'from' ? (relSortDir === 'asc' ? ' ↑' : ' ↓') : ''}</button>
@@ -539,15 +640,12 @@
         />
       </div>
     {/if}
-  </section>
+  </SectionToggle>
 {/if}
 
 {#if dedupedSchemaEdges.length > 0}
-  <section class="detail-section">
-    <div class="section-heading schema-section-heading">
-      Schema FK connections — auto-detected ({dedupedSchemaEdges.length})
-      <span class="schema-badge">from FK schema</span>
-    </div>
+  <SectionToggle table={data.name} sectionId="schema" heading={`Schema FK connections — auto-detected (${dedupedSchemaEdges.length})`}>
+    <span slot="docs" class="schema-badge">from FK schema</span>
     <p class="mini schema-note">
       These FK links come directly from the D365FO database schema (43,584 verified associations across 5,587 tables),
       filtered to tables already referenced in documented flows. Self-referencing FKs (a table pointing to itself)
@@ -603,16 +701,13 @@
         />
       </div>
     {/if}
-  </section>
+  </SectionToggle>
 {:else if $fkLoadState === 'idle'}
   <!-- FK map not yet loaded; will auto-populate once user interacts with the page -->
 {/if}
 
 {#if data.usedIn.length > 0}
-  <section class="detail-section">
-    <div class="section-heading">
-      Used in {data.usedIn.length} stage{data.usedIn.length !== 1 ? 's' : ''}
-    </div>
+  <SectionToggle table={data.name} sectionId="usedin" heading={`Used in ${data.usedIn.length} stage${data.usedIn.length !== 1 ? 's' : ''}`}>
     <div class="table-usages">
       {#each data.usedIn as usage}
         <a href="/flow/{usage.flowId}/{usage.stageId}" class="table-usage">
@@ -621,10 +716,52 @@
         </a>
       {/each}
     </div>
-  </section>
+  </SectionToggle>
 {/if}
 
 <style>
+  /* ── Pill TOC (UX #5) ──────────────────────────────────────────────────── */
+  .toc-pills {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin: 14px 0 4px;
+    position: sticky;
+    top: 12px;
+    z-index: 30;
+    background: var(--clr-bg);
+    padding: 6px 2px;
+    border-radius: 10px;
+  }
+  .toc-pill {
+    padding: 4px 11px;
+    border-radius: 20px;
+    border: 1px solid var(--clr-border);
+    background: var(--clr-surface-raised);
+    color: var(--clr-text-muted);
+    font-size: 11px;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .toc-pill:hover { border-color: var(--clr-border-accent); color: var(--clr-text); }
+  .toc-pill.toc-graph { color: var(--clr-blue); }
+  .toc-pill.toc-graph-folded { font-weight: 700; }
+  @media (max-width: 700px) {
+    .toc-pills { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none; }
+    .toc-pills::-webkit-scrollbar { display: none; }
+    .toc-pill { flex: 0 0 auto; }
+  }
+  /* Mobile sticky TOC sits under the mobile-bar (hamburger bar, sticky top:0) */
+  @media (max-width: 900px) {
+    .toc-pills { top: calc(var(--mobile-bar-h, 44px) + 8px); }
+  }
+  :global(html.light) .toc-pill:hover { background: rgba(0,0,0,0.05); }
+
+  /* ── Section anchors: scroll target lands below the sticky TOC ────────── */
+  :global(.detail-section) { scroll-margin-top: 64px; }
+
   .trace-links {
     display: flex;
     gap: 10px;
@@ -651,10 +788,6 @@
   }
 
   .trace-link-secondary { color: var(--clr-green); }
-
-  .schema-section-heading {
-    color: var(--clr-text-muted);
-  }
 
   .schema-badge {
     font-size: 10px;
