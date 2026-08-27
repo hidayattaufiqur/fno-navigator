@@ -762,6 +762,7 @@
   /* ── Pill TOC (UX #5) ──────────────────────────────────────────────────── */
   .toc-pills {
     display: inline-flex;
+    align-self: flex-start;
     gap: 6px;
     flex-wrap: wrap;
     margin: 14px 0 4px;
