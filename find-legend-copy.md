@@ -26,7 +26,7 @@ Every tooltip below is 12 words or fewer.
 | --- | --- |
 | `business-flow-pattern` | Follows a document flow. |
 | `document-id-continuity` | Document IDs stay continuous across hops. |
-| `named-reference-joins` | Named reference joins, with no anonymous RecId. |
+| `named-reference-joins` | Named reference joins, with no anonymous record ID. |
 | `business-key-joins` | Uses a business-key path. |
 | `generic-lookup-intermediate` | Passes through a generic lookup. |
 | `curated-tables` | Passes curated tables. |
@@ -70,7 +70,7 @@ Each reason chip names one piece of evidence behind the path's class or score, w
 | --- | --- | --- |
 | `business-flow-pattern` | follows a document flow | The tables follow a recognizable business document sequence. |
 | `document-id-continuity` | document IDs stay continuous across hops | Each hop keeps the document identity connected. |
-| `named-reference-joins` | named reference joins (no anonymous RecId) | The joins use named references instead of an anonymous record ID. |
+| `named-reference-joins` | named reference joins (no anonymous record ID) | The joins use named references instead of an anonymous record ID. |
 | `business-key-joins` | business-key path | The path uses a meaningful business key. |
 | `generic-lookup-intermediate` | passes through a generic lookup | A broad lookup table sits between the selected tables. |
 | `curated-tables` | passes curated tables | The path crosses tables marked as useful in the dataset. |

@@ -582,7 +582,7 @@
     {#if phase === 'loading'}
       <div class="mini loading-mini" aria-busy="true">
         <span class="spin-dot" aria-hidden="true"></span>
-        Igniting the constellation…
+        Loading graph…
       </div>
     {/if}
     {#if tip}

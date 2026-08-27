@@ -490,6 +490,7 @@
         <button
           class="cat-pill"
           class:active={methodCategory === cat}
+          aria-pressed={methodCategory === cat}
           on:click={() => (methodCategory = cat)}
         >
           {cat === 'all' ? 'All' : METHOD_CATEGORIES[cat].label}
@@ -500,6 +501,7 @@
     <button
       class="cat-pill common-pill"
       class:active={showCommonOnly}
+      aria-pressed={showCommonOnly}
       on:click={() => (showCommonOnly = !showCommonOnly)}
       title={showCommonOnly ? 'Show all methods' : 'Show common methods only'}
     >Common only</button>
@@ -551,7 +553,7 @@
 
 {#if allEdges.length > 0}
   <SectionToggle bind:this={graphSection} onToggle={onGraphToggle} table={data.name} sectionId="graph" heading={`Relation graph — ${data.relationsUsing.length} documented${dedupedSchemaEdges.length > 0 ? ` + ${dedupedSchemaEdges.length} schema FK` : ''}`}>
-    {#if $fkLoadState === 'loading'}<span class="mini" style="margin-left:8px;opacity:0.5">loading schema…</span>{/if}
+    {#if $fkLoadState === 'loading'}<span class="mini" style="margin-left:8px;opacity:0.5">Loading schema…</span>{/if}
 
     <!-- M3: List | Graph tabs (Q13). List = SVG orbit (unchanged, ≤24 fast path);
          Graph = Sigma neighbourhood (40 cap, pills + plumbing toggle). -->
@@ -699,7 +701,7 @@
 {/if}
 
 {#if dedupedSchemaEdges.length > 0}
-  <SectionToggle table={data.name} sectionId="schema" heading={`Schema FK connections — auto-detected (${dedupedSchemaEdges.length})`}>
+  <SectionToggle table={data.name} sectionId="schema" heading={`Schema FK connections (${dedupedSchemaEdges.length})`}>
     <span slot="docs" class="schema-badge">from FK schema</span>
     <p class="mini schema-note">
       These FK links come directly from the D365FO database schema (43,584 verified associations across 5,587 tables),

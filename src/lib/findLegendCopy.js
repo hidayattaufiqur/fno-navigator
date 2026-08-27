@@ -25,7 +25,7 @@ export const TOOLTIP_COPY = {
 export const REASON_TOOLTIP_COPY = {
   'business-flow-pattern': 'Follows a document flow.',
   'document-id-continuity': 'Document IDs stay continuous across hops.',
-  'named-reference-joins': 'Named reference joins, with no anonymous RecId.',
+  'named-reference-joins': 'Named reference joins, with no anonymous record ID.',
   'business-key-joins': 'Uses a business-key path.',
   'generic-lookup-intermediate': 'Passes through a generic lookup.',
   'curated-tables': 'Passes curated tables.',
@@ -86,7 +86,7 @@ export const LEGEND_GROUPS = [
         table: [
           { code: 'business-flow-pattern', chip: 'follows a document flow', meaning: 'The tables follow a recognizable business document sequence.' },
           { code: 'document-id-continuity', chip: 'document IDs stay continuous across hops', meaning: 'Each hop keeps the document identity connected.' },
-          { code: 'named-reference-joins', chip: 'named reference joins (no anonymous RecId)', meaning: 'The joins use named references instead of an anonymous record ID.' },
+          { code: 'named-reference-joins', chip: 'named reference joins (no anonymous record ID)', meaning: 'The joins use named references instead of an anonymous record ID.' },
           { code: 'business-key-joins', chip: 'business-key path', meaning: 'The path uses a meaningful business key.' },
           { code: 'generic-lookup-intermediate', chip: 'passes through a generic lookup', meaning: 'A broad lookup table sits between the selected tables.' },
           { code: 'curated-tables', chip: 'passes curated tables', meaning: 'The path crosses tables marked as useful in the dataset.' },

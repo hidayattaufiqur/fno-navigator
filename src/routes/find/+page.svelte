@@ -425,7 +425,7 @@
   const REASON_LABELS = {
     'business-flow-pattern': 'follows a document flow',
     'document-id-continuity': 'document IDs stay continuous across hops',
-    'named-reference-joins': 'named reference joins (no anonymous RecId)',
+    'named-reference-joins': 'named reference joins (no anonymous record ID)',
     'business-key-joins': 'business-key path',
     'generic-lookup-intermediate': 'passes through a generic lookup',
     'curated-tables': 'passes curated tables',
@@ -602,9 +602,9 @@
 <header class="hero">
   <div>
     <p class="eyebrow">Dynamics 365 Finance &amp; Operations</p>
-    <h2>Table Path Finder</h2>
+    <h2>Find Table Path</h2>
     <p class="lede">
-      Discover the FK relationship chain between any two D365FO tables. Uses
+      Find how two D365FO tables connect through foreign keys. Uses
       <strong>43,584 verified associations</strong> across 5,587 tables — the full Microsoft Dynamics
       database graph.
     </p>
@@ -695,6 +695,7 @@
               type="button"
               class="hops-btn"
               class:hops-active={maxHops === hops}
+              aria-pressed={maxHops === hops}
               on:click={() => (maxHops = hops)}
             >{hops}</button>
           {/each}
@@ -708,12 +709,14 @@
             type="button"
             class="sort-btn"
             class:sort-active={sortMode === 'shortest'}
+            aria-pressed={sortMode === 'shortest'}
             on:click={() => changeSort('shortest')}
           >Shortest</button>
           <button
             type="button"
             class="sort-btn"
             class:sort-active={sortMode === 'unique'}
+            aria-pressed={sortMode === 'unique'}
             on:click={() => changeSort('unique')}
           >Most unique</button>
         </div>

@@ -415,7 +415,7 @@
         <line x1="0" y1="25" x2="24" y2="25" style="stroke: var(--clr-edge-in-h);" stroke-width="1.5" marker-end="url(#arr-g)" />
         <text x="30" y="29" fill="var(--clr-text-faint)" font-size="10" font-family="sans-serif">incoming FK</text>
         <line x1="0" y1="43" x2="24" y2="43" style="stroke: var(--clr-edge-schema);" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#arr-b)" />
-        <text x="30" y="47" fill="var(--clr-text-faint)" font-size="10" font-family="sans-serif">schema FK (auto-detected)</text>
+        <text x="30" y="47" fill="var(--clr-text-faint)" font-size="10" font-family="sans-serif">schema FK</text>
         <text x="0" y="66" fill="var(--clr-text-faint)" font-size="9.5" font-family="sans-serif">Hover edge for FK fields · click node to navigate</text>
       </g>
     </svg>

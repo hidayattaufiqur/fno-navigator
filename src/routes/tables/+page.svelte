@@ -139,6 +139,7 @@
         <button
           class="mod-pill"
           class:active={moduleFilter === moduleOption}
+          aria-pressed={moduleFilter === moduleOption}
           data-module={moduleOption !== 'All' ? moduleOption : undefined}
           on:click={() => (moduleFilter = moduleOption)}
         >{#if moduleOption !== 'All'}<span class="dot"></span>{/if}{moduleOption}</button>
