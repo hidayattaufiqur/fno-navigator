@@ -921,7 +921,7 @@
             <div class="toolbar-actions">
               <label class="plumb-toggle">
                 <input type="checkbox" checked={graphStateSnap.showPlumbing} on:change={setPlumbing} />
-                Show plumbing
+                Show system FKs
               </label>
               <button class="hide-graph-btn" on:click={disableGraph}>Hide graph</button>
             </div>

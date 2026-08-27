@@ -597,7 +597,7 @@
             </div>
             <label class="plumb-toggle">
               <input type="checkbox" role="switch" checked={graphStateSnap.showPlumbing} on:change={(e) => setShowPlumbing(e.currentTarget.checked)} />
-              Show plumbing
+              Show system FKs
             </label>
           </div>
           {#if sigmaOverflow > 0}
