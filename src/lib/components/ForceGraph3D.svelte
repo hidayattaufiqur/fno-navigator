@@ -24,8 +24,19 @@
 
   const dispatch = createEventDispatcher()
 
+  // default framing + zoom controls (M6 UX): graph is centred at origin, so
+  // zooming scales the camera position vector (keeps direction) and reset
+  // returns to this mount-time default.
+  const DEFAULT_CAMERA = { x: 300, y: 225, z: 420 } // dist ≈ 563
+  const CAMERA_LOOK_AT = { x: 0, y: 0, z: 0 }
+  const FIT_PAD = 120 // zoomToFit margin — breathing room after refit
+  const ZOOM_MIN_DIST = 40
+  const ZOOM_MAX_DIST = 1500
+  const ZOOM_EASE_MS = 320
+
   let phase = 'loading' // 'loading' | 'ready' | 'fallback'
   let container = null
+  let userView = false // user steered the camera (drag/zoom/focus) → don't auto-refit
 
   let THREE = null
   let ForceGraph3DFactory = null // lazy factory fn from '3d-force-graph'
@@ -100,7 +111,7 @@
     Graph.graphData(graphDataOf())
     Graph.nodeThreeObject(buildNodeObject)
     Graph.linkMaterial(linkMaterialFor)
-    if (opts.fit) Graph.zoomToFit(opts.fitMs || 500, 60)
+    if (opts.fit) Graph.zoomToFit(opts.fitMs || 500, FIT_PAD)
     Graph.d3ReheatSimulation()
     applyHover(null)
   }
@@ -336,15 +347,21 @@
       console.warn('[ForceGraph3D] bloom unavailable, plain render:', err)
     }
 
-    Graph.cameraPosition({ x: 200, y: 150, z: 280 }, { x: 0, y: 0, z: 0 }, 0)
+    Graph.cameraPosition(DEFAULT_CAMERA, CAMERA_LOOK_AT, 0)
 
     Graph.onNodeHover((node) => applyHover(node ? node.table : null))
-    Graph.onNodeClick((node) => { if (node) onnodeclick(node.table) })
+    Graph.onNodeClick((node) => { if (node) { userView = true; onnodeclick(node.table) } })
     Graph.onBackgroundClick(() => applyHover(null))
+    Graph.onEngineStop(() => {
+      // sim settled — refit so the final spread fits with margin (only if the
+      // user hasn't steered the camera meanwhile)
+      if (Graph && !userView) Graph.zoomToFit(600, FIT_PAD)
+    })
     if (tooltip) Graph.onLinkHover((link) => { link ? showTip(link) : (tip = null) })
 
     Graph.controls().addEventListener('start', () => {
       clearTimeout(orbitTimer)
+      userView = true // user is steering — never refit over their view
       Graph.controls().autoRotate = false
     })
     Graph.controls().addEventListener('end', () => {
@@ -382,7 +399,7 @@
     prevSig = sliceSig()
     setTimeout(() => {
       if (Graph) {
-        Graph.zoomToFit(600, 60)
+        Graph.zoomToFit(600, FIT_PAD)
       }
       if (!readyNotified) { readyNotified = true; onready() }
     }, 400)
@@ -457,6 +474,7 @@
     sliceNodes = nextNodes.length ? nextNodes : sliceNodes
     sliceEdges = nextEdges.length ? nextEdges : sliceEdges
     prevSig = sliceSig()
+    userView = false // fresh slice → auto-framing applies again
     rebuildGraph({ fit: true })
   }
 
@@ -484,6 +502,26 @@
     } catch {
       return null
     }
+  }
+
+  // ── zoom controls (+/−/reset) — camera-vector scale about origin ─────────
+  function zoomBy(factor) {
+    if (!Graph) return
+    const { x, y, z } = Graph.cameraPosition()
+    const dist = Math.hypot(x, y, z)
+    const clamped = Math.min(ZOOM_MAX_DIST, Math.max(ZOOM_MIN_DIST, dist * factor))
+    const k = clamped / dist
+    Graph.cameraPosition({ x: x * k, y: y * k, z: z * k }, CAMERA_LOOK_AT, ZOOM_EASE_MS)
+  }
+  function zoomReset() {
+    if (!Graph) return
+    // Return to the load-default framing: restore the default camera DIRECTION
+    // (auto-orbit may have rotated), then re-fit distance along it. zoomToFit
+    // alone keeps the current rotation, which reads as "panned" vs the default.
+    Graph.cameraPosition(DEFAULT_CAMERA, CAMERA_LOOK_AT, ZOOM_EASE_MS)
+    setTimeout(() => {
+      if (Graph && !userView) Graph.zoomToFit(ZOOM_EASE_MS, FIT_PAD)
+    }, ZOOM_EASE_MS + 50)
   }
 
   // ── rebuild orchestration: page replaced the slice wholesale ─────────────
@@ -529,6 +567,11 @@
   >
     <Starfield />
     <div class="fg3d-mount" bind:this={container}></div>
+    <div class="zoom-group" role="group" aria-label="Graph zoom controls">
+      <button class="zoom-btn" data-testid="zoom-in" aria-label="Zoom in" on:click={() => zoomBy(1 / 1.5)}>+</button>
+      <button class="zoom-btn" data-testid="zoom-out" aria-label="Zoom out" on:click={() => zoomBy(1.5)}>−</button>
+      <button class="zoom-btn" data-testid="zoom-reset" aria-label="Reset view" on:click={zoomReset}>⤢</button>
+    </div>
     {#if phase === 'loading'}
       <div class="mini loading-mini" aria-busy="true">
         <span class="spin-dot" aria-hidden="true"></span>
@@ -573,6 +616,37 @@
     inset: 0;
     z-index: 2;
   }
+  .zoom-group {
+    position: absolute;
+    right: 14px;
+    bottom: 14px;
+    z-index: 30;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .zoom-btn {
+    width: 32px;
+    height: 32px;
+    display: grid;
+    place-items: center;
+    font: inherit;
+    font-size: 16px;
+    line-height: 1;
+    color: var(--clr-text-muted, #8ba8d8);
+    background: var(--toolbar-glass, rgba(13, 17, 23, 0.55));
+    border: 1px solid var(--clr-border-subtle, rgba(120, 160, 220, 0.25));
+    border-radius: var(--r-sm, 6px);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
+    padding: 0;
+  }
+  .zoom-btn:hover { color: var(--clr-text, #dbe7ff); border-color: var(--clr-border-accent, #5a94e8); }
+  .zoom-btn:active { transform: scale(0.94); }
   .mini {
     position: absolute;
     inset: 0;
