@@ -761,7 +761,7 @@
 <style>
   /* ── Pill TOC (UX #5) ──────────────────────────────────────────────────── */
   .toc-pills {
-    display: flex;
+    display: inline-flex;
     gap: 6px;
     flex-wrap: wrap;
     margin: 14px 0 4px;
@@ -998,6 +998,7 @@
     align-items: center;
     gap: 6px;
     flex-wrap: wrap;
+    margin-bottom: 8px;
   }
   .rel-sort-label {
     font-size: 11px;
