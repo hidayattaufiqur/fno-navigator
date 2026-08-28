@@ -53,11 +53,19 @@ playwright-report/
 storage-state.json
 tests/.scratch/
 tests/.evidence/
+.playwright/
 
 # Local-only tooling / private assistant metadata
 .claude/
 .github/copilot-instructions.md
 REVIEWING.md
+
+# Agent-generated dev artifacts (screenshots, probes, audits)
+artifacts/
+tests/*.mjs
+.janus-evidence/
+.r2-evidence/
+.r3-evidence/
 
 # Ignore build artifacts created by SvelteKit / adapter
 /.svelte-kit/
