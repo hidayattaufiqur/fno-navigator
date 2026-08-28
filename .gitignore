@@ -62,10 +62,30 @@ REVIEWING.md
 
 # Agent-generated dev artifacts (screenshots, probes, audits)
 artifacts/
-tests/*.mjs
 .janus-evidence/
 .r2-evidence/
 .r3-evidence/
+
+# Dev probe scripts (CI scripts kept — check-legend-copy, validate-fixtures, assert-fixtures, golden-test, bench)
+tests/capture-*.mjs
+tests/chrome-styles-probe.mjs
+tests/dark-control.mjs
+tests/diag-*.mjs
+tests/e2e-*.mjs
+tests/evidence.mjs
+tests/gen-*.mjs
+tests/graph-*.mjs
+tests/harness.mjs
+tests/live-ux-capture.mjs
+tests/mob-*.mjs
+tests/mobile-probe.mjs
+tests/pixel-diff-*.mjs
+tests/r2-*.mjs
+tests/r3-*.mjs
+tests/redesign-capture.mjs
+tests/tables-light-probe.mjs
+tests/ux-*.mjs
+tests/verify-sigma-all.mjs
 
 # Ignore build artifacts created by SvelteKit / adapter
 /.svelte-kit/
