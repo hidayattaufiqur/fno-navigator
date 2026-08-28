@@ -1621,6 +1621,13 @@ select, .search input, .legend-summary { border-radius: var(--r-sm, 6px); }
 .canonical-badge, .class3-badge, .reason-chip, .rel-fields,
 .nav-link-count, .rel-sort-btn { border-radius: var(--r-pill, 999px); }
 
+/* r3 radius rule (R3-SPEC §1): every INTERACTIVE element = sm (6px).
+   Pill is reserved for non-interactive data indicators only. */
+.mod-pill, .cat-pill, .toc-pill, .rel-sort-btn, .trace-link,
+.table-chip, .flow-link, .flow-list a,
+a.pill, .pill.rel-source, .rel-source { border-radius: var(--r-sm, 6px); }
+.pipeline-node { border-radius: var(--r-sm, 6px); }
+
 /* ── Light mode surface overrides ───────────────────────────────────────────
    rgba(255,255,255,X) overlays become invisible on a light background.
    Replace key surfaces with solid CSS variables for light mode.

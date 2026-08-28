@@ -798,7 +798,7 @@
   .toc-pill {
     padding: 8px 14px;
     min-height: 32px;
-    border-radius: var(--r-pill, 999px);
+    border-radius: var(--r-sm, 6px);
     border: 1px solid var(--clr-border);
     background: var(--clr-surface-raised);
     color: var(--clr-text-muted);
@@ -982,7 +982,7 @@
   .cat-pill {
     padding: 6px 12px;
     min-height: 32px;
-    border-radius: var(--r-pill, 999px);
+    border-radius: var(--r-sm, 6px);
     border: 1px solid var(--clr-border);
     background: transparent;
     color: var(--clr-text-muted);
@@ -1076,7 +1076,7 @@
   }
   .rel-sort-btn {
     padding: 2px 9px;
-    border-radius: var(--r-pill, 999px);
+    border-radius: var(--r-sm, 6px);
     border: 1px solid var(--clr-border);
     background: transparent;
     color: var(--clr-text-muted);
