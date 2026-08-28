@@ -1345,6 +1345,7 @@ a.node.active {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  border-radius: var(--r-sm, 6px);
 }
 .pipeline-arrow {
   color: var(--clr-text-faint);
