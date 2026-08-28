@@ -712,7 +712,7 @@
   .sg-chip {
     font-size: 10px;
     padding: 1px 7px;
-    border-radius: 999px;
+    border-radius: 6px;
     border: 1px solid var(--clr-border-subtle);
     color: var(--clr-text-muted);
   }

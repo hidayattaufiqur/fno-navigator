@@ -1260,7 +1260,7 @@
     font-size: 10px;
     font-weight: 600;
     padding: 2px 6px;
-    border-radius: var(--r-pill, 999px);
+    border-radius: var(--r-pill, 6px);
     background: var(--mod-clr-bg, var(--clr-border));
     color: var(--mod-clr, var(--clr-blue-strong));
     flex-shrink: 0;
@@ -1334,7 +1334,7 @@
     text-transform: uppercase;
     letter-spacing: 0.4px;
     padding: 1px 6px;
-    border-radius: var(--r-pill, 999px);
+    border-radius: var(--r-pill, 6px);
     background: rgba(76, 175, 80, 0.12);
     border: 1px solid rgba(76, 175, 80, 0.3);
     color: var(--clr-green);
@@ -1445,7 +1445,7 @@
     text-transform: uppercase;
     letter-spacing: 0.4px;
     padding: 1px 6px;
-    border-radius: var(--r-pill, 999px);
+    border-radius: var(--r-pill, 6px);
     background: rgba(255, 180, 0, 0.14);
     border: 1px solid rgba(255, 180, 0, 0.35);
     color: #ffb400;
@@ -1461,7 +1461,7 @@
     text-transform: uppercase;
     letter-spacing: 0.4px;
     padding: 1px 6px;
-    border-radius: var(--r-pill, 999px);
+    border-radius: var(--r-pill, 6px);
     background: rgba(63, 185, 80, 0.12);
     border: 1px solid rgba(63, 185, 80, 0.3);
     color: var(--clr-green);
@@ -1482,7 +1482,7 @@
     color: var(--clr-text-muted);
     background: rgba(79, 195, 247, 0.07);
     border: 1px solid rgba(79, 195, 247, 0.22);
-    border-radius: var(--r-pill, 999px);
+    border-radius: var(--r-pill, 6px);
     padding: 1px 6px;
   }
 
@@ -1947,7 +1947,7 @@
     color: var(--clr-text-muted);
     background: var(--toolbar-status-bg);
     border: 1px solid var(--toolbar-bd);
-    border-radius: 999px;
+    border-radius: 6px;
     pointer-events: none;
   }
   .pop-card {

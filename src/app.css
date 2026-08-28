@@ -51,7 +51,7 @@
   --r-sm: 6px;
   --r-md: 10px;
   --r-lg: 14px;
-  --r-pill: 999px;
+  --r-pill: 6px;
   /* Solid graph-toolbar surfaces (DESIGN.md: no glass in light, solid bar) */
   --toolbar-bg: #161b22;
   --toolbar-bd: #30363d;
@@ -1601,7 +1601,7 @@ select, .search input, .view-toggle, .nav-search input,
 /* pill — chips, TOC, module filters */
 .mod-pill, .cat-pill, .toc-pill, .table-chip, .rel-field,
 .flow-list a, .flow-link, .match-reason, .module-badge,
-.trace-link, .graph-status, .status-pill { border-radius: var(--r-pill, 999px); }
+.trace-link, .graph-status, .status-pill { border-radius: var(--r-pill, 6px); }
 
 /* r2 radius completion (R2-CONSISTENCY-SPEC §2) — every rounded element
    consumes exactly one token. sm 6 / md 10 / lg 14 / pill 999. */
@@ -1619,7 +1619,7 @@ select, .search input, .legend-summary { border-radius: var(--r-sm, 6px); }
 /* pill — every chip/badge (was hardcoded 4px/5px/6px/10px) */
 .pill, .chip, .method-badge, .cat-badge, .suggest-mod,
 .canonical-badge, .class3-badge, .reason-chip, .rel-fields,
-.nav-link-count, .rel-sort-btn { border-radius: var(--r-pill, 999px); }
+.nav-link-count, .rel-sort-btn { border-radius: var(--r-pill, 6px); }
 
 /* r3 radius rule (R3-SPEC §1): every INTERACTIVE element = sm (6px).
    Pill is reserved for non-interactive data indicators only. */

@@ -910,7 +910,7 @@
     font-size: 10px;
     font-weight: 600;
     padding: 2px 7px;
-    border-radius: var(--r-pill, 999px);
+    border-radius: var(--r-pill, 6px);
     background: var(--clr-surface-raised);
     border: 1px solid var(--clr-border);
     color: var(--clr-text-faint);
@@ -1024,7 +1024,7 @@
   }
 
   /* Category badge colours */
-  .method-badge { font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: var(--r-pill, 999px); letter-spacing: 0.3px; white-space: nowrap; }
+  .method-badge { font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: var(--r-pill, 6px); letter-spacing: 0.3px; white-space: nowrap; }
   .cat-badge.cat-crud       { background: rgba(76,175,80,0.12);  border: 1px solid rgba(76,175,80,0.3);  color: var(--clr-green); }
   .cat-badge.cat-validation { background: rgba(255,152,0,0.12);  border: 1px solid rgba(255,152,0,0.3);  color: #ffb74d; }
   .cat-badge.cat-init       { background: rgba(33,150,243,0.12); border: 1px solid rgba(33,150,243,0.3); color: #64b5f6; }
@@ -1184,7 +1184,7 @@
     color: var(--clr-text-muted);
     background: var(--toolbar-status-bg);
     border: 1px solid var(--toolbar-bd);
-    border-radius: 999px;
+    border-radius: 6px;
     pointer-events: none;
   }
   .graph-fallback {
