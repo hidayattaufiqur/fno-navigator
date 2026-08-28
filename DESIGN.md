@@ -172,24 +172,24 @@ components:
   toc-pill:
     backgroundColor: "{colors.surface-raised}"
     textColor: "{colors.text-muted}"
-    rounded: "{rounded.pill}"
+    rounded: "{rounded.sm}"
     padding: 6px 14px
   toc-pill-active:
     backgroundColor: "{colors.accent-tint}"
     textColor: "{colors.accent-strong}"
-    rounded: "{rounded.pill}"
+    rounded: "{rounded.sm}"
     padding: 6px 14px
   mod-pill:
     backgroundColor: "transparent"
     textColor: "{colors.text-muted}"
-    rounded: "{rounded.pill}"
+    rounded: "{rounded.sm}"
     padding: 6px 12px
   mod-pill-active:
     textColor: "{colors.text}"
   badge-semantic:
     backgroundColor: "{colors.surface-raised}"
     textColor: "{colors.text-muted}"
-    rounded: "{rounded.sm}"
+    rounded: "{rounded.pill}"
     padding: 2px 8px
   pager-button:
     backgroundColor: "{colors.surface-raised}"
@@ -261,8 +261,11 @@ Surface archetype (claude-design "surface-first"):
 9. **No glass in light mode.** Light surfaces are solid; `backdrop-filter` only in dark.
 10. **Keep the graph.** Same features (module filter, system-FK toggle, expand, URL
     state). Only the chrome around it changes.
-11. **One radius per element.** Every rounded element consumes exactly one token
-    (sm 6 / md 10 / lg 14 / pill 999). Chips and badges are pills. No 4px chips.
+11. **One radius per element — interactive = sm, indicators = pill.** Every
+    *interactive* element (buttons, inputs, filters, TOC pills, chips that are
+    links/buttons, segmented controls, focus rings, graph nodes) is `sm` (6px).
+    `pill` (999px) is reserved for *non-interactive* data indicators: static
+    chips, badges, dots, status reads. Containers keep `md`/`lg`. No 4px chips.
 12. **Module colors flip in light mode.** `--mod-clr` pastels are dark-theme values;
     light mode uses darker equivalents so module-tinted text keeps ≥ 4.5:1.
 
@@ -416,14 +419,19 @@ the page title is the largest text on the page (sidebar brand is demoted below i
 
   | Token | Value | Applies to |
   |---|---|---|
-  | `sm` | 6px | buttons, inputs, segmented controls, list rows, focus rings, ERD SVG nodes |
+  | `sm` | 6px | **every interactive element**: buttons, inputs, selects, segmented controls, filter pills (`mod-pill`, `cat-pill`), TOC pills, chips-that-are-links/buttons (`table-chip`, `trace-link`, `rel-sort-btn`, `flow-link`), list rows, focus rings, ERD SVG nodes |
   | `md` | 10px | cards, containers, tables, callouts, tooltips/popovers, dropdowns |
   | `lg` | 14px | hero/title block, graph pane/canvas, stage pipeline |
-  | `pill` | 999px | chips, pills, badges, TOC, module filters, count chips |
+  | `pill` | 999px | **non-interactive data indicators only**: static chips, badges, dots, status reads |
 
-- All chips/badges are pill radius: `module-badge`, `.pill`, `.chip`, `cat-badge`,
-  `method-badge`, `suggest-mod`, canonical/class3/curated badges, `reason-chip`,
-  `rel-fields`, `rel-field`, `table-chip`, `match-reason`, `nav-link-count`.
+- **Interactive = sm, always.** Any element the user can click, tap, or focus is
+  `sm` (6px) — including pills used as filters or links. The "All" module dropdown,
+  the "Step 1…" pipeline boxes, the TOC pills, the category pills, and the trace
+  links all share the same 6px radius.
+- **Pill is for indicators.** Static info chips and badges keep `pill`: `module-badge`,
+  `.pill`, `.chip`, `cat-badge`, `method-badge`, `suggest-mod`, canonical/class3/
+  curated badges, `reason-chip`, `rel-fields`, `rel-field`, `schema-badge`,
+  `match-reason`, `nav-link-count`, `status-pill`/`graph-status`.
 - ERD SVG nodes: `rx` 6px for satellite, center, and label rects (RelationGraph).
 - `50%` is reserved for dots and spinners only; `2px` for hamburger lines.
 
@@ -439,20 +447,25 @@ the page title is the largest text on the page (sidebar brand is demoted below i
   green/neutral split).
 
 ### Pills & chips
-- `toc-pill` / `mod-pill`: pill radius, raised surface, muted text; active = accent tint
-  + accent text. Module pills show the module dot; zero-count pills at 45% opacity.
-- `module-chip`: pill, accent-tint, `--mod-clr` text — used on table cards and title
-  blocks.
-- `badge-semantic`: flat, muted, 10px uppercase — for "curated", "business flow",
-  "sampled". One accent-free look; semantic color only when the badge IS the message
-  (e.g. "shortest" is success-green, but only if it stays).
+- `toc-pill` / `mod-pill` / `cat-pill` / `rel-sort-btn` / `trace-link`: **sm radius**
+  (6px) — they are interactive (filters, nav, links). Raised surface, muted text;
+  active = accent tint + accent text. Module pills show the module dot; zero-count
+  pills at 45% opacity.
+- `module-chip`: pill (data indicator), accent-tint, `--mod-clr` text — used on
+  table cards and title blocks.
+- `badge-semantic`: pill (data indicator), flat, muted, 10px uppercase — for
+  "curated", "business flow", "sampled". One accent-free look; semantic color only
+  when the badge IS the message (e.g. "shortest" is success-green, but only if it
+  stays).
 
 ### Chips (static info)
-- `chip-pill`: pill radius, tinted bg + colored text. One component, two flavors:
-  module-tinted (`module-badge`, module `.pill`, `suggest-mod`) and semantic
-  (`cat-badge`, class3, curated, `match-reason`, `reason-chip`). Light mode uses the
-  darker color variants (see Colors → Light).
-- All chips/badges are pill-shaped; none are 4px rectangles.
+- `chip-pill`: **pill radius** (non-interactive data indicator), tinted bg + colored
+  text. One component, two flavors: module-tinted (`module-badge`, module `.pill`,
+  `suggest-mod`) and semantic (`cat-badge`, class3, curated, `match-reason`,
+  `reason-chip`). Light mode uses the darker color variants (see Colors → Light).
+- All chips/badges are pill-shaped; none are 4px rectangles. **They are never
+  interactive** — if a chip becomes a link or button, it takes `sm` radius and
+  stops being a chip.
 
 ### Path rows (/find)
 - Row: rank (muted, tabular) + chain (table names, neutral ink, bold source/target,
@@ -481,6 +494,8 @@ the page title is the largest text on the page (sidebar brand is demoted below i
 - Make the table name and FK fields the most legible text on the page.
 - Put one idea per section; let whitespace do the grouping.
 - Keep every interactive target ≥ 44px on touch devices.
+- Give every interactive element the same 6px (`sm`) radius — filters, TOC,
+  trace links, buttons, inputs.
 - Keep the URL state machine exactly as-is (`?graph=1`, `?from=`, `?to=`, `?modules=`).
 - Keep the graph's features; simplify only its chrome.
 
@@ -490,6 +505,8 @@ the page title is the largest text on the page (sidebar brand is demoted below i
 - Don't stack a rainbow of category badges; method categories are neutral labels.
 - Don't put a `<select>` where a segmented control fits (hops), and don't make a
   segmented control where a `<select>` fits (module filter).
+- Don't give an interactive element a pill radius — pills are for static data
+  indicators only (module chips, badges, status reads).
 - Don't paginate a 7-row table.
 - Don't duplicate the "43,584 associations / 5,587 tables" number in three places.
 - Don't use glassmorphism in light mode.
