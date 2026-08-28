@@ -1006,6 +1006,7 @@ a.node.active {
   margin: 4px 0 0;
   color: var(--clr-blue);
   letter-spacing: -0.3px;
+  overflow-wrap: anywhere;   /* long mono table names must wrap on mobile (390px) */
 }
 .docs-link {
   font-size: 13px;
@@ -1324,12 +1325,10 @@ a.node.active {
 .step-num {
   font-size: 10px;
   font-weight: 700;
-  color: var(--clr-blue);
-  opacity: 0.55;
+  color: var(--clr-text-muted);   /* was --clr-blue + opacity .55 (2.9:1 in light) */
   letter-spacing: 0.04em;
 }
 .pipeline-node.active .step-num {
-  opacity: 1;
   color: var(--clr-green);
 }
 .step-title {
@@ -1603,6 +1602,24 @@ select, .search input, .view-toggle, .nav-search input,
 .flow-list a, .flow-link, .match-reason, .module-badge,
 .trace-link, .graph-status, .status-pill { border-radius: var(--r-pill, 999px); }
 
+/* r2 radius completion (R2-CONSISTENCY-SPEC §2) — every rounded element
+   consumes exactly one token. sm 6 / md 10 / lg 14 / pill 999. */
+
+/* sm — buttons, inputs, segmented, focus */
+.cta-button, .step-nav-btn, .suggestions button, .sort-toggle,
+.nav-search input, .autocomplete-wrap input, .method-search,
+select, .search input, .legend-summary { border-radius: var(--r-sm, 6px); }
+
+/* md — callouts, tooltips, dropdowns, loading, fallback */
+.canonical-block, .finder-loading, .finder-empty, .finder-note,
+.finder-error, .find-tip, .suggestions, .graph-fallback,
+.table-usage, .graph-wrap { border-radius: var(--r-md, 10px); }
+
+/* pill — every chip/badge (was hardcoded 4px/5px/6px/10px) */
+.pill, .chip, .method-badge, .cat-badge, .suggest-mod,
+.canonical-badge, .class3-badge, .reason-chip, .rel-fields,
+.nav-link-count, .rel-sort-btn { border-radius: var(--r-pill, 999px); }
+
 /* ── Light mode surface overrides ───────────────────────────────────────────
    rgba(255,255,255,X) overlays become invisible on a light background.
    Replace key surfaces with solid CSS variables for light mode.
@@ -1738,3 +1755,42 @@ html.light .stage-pipeline {
   background: var(--clr-surface-raised);
   border-color: var(--clr-border);
 }
+
+/* ── r2 light-mode readability (R2-CONSISTENCY-SPEC §3) ─────────────────────
+   Hardcoded dark-theme colors never flipped in light; pastel module colors
+   and white-on-white overlays failed WCAG AA. All fixes additive on
+   html.light so dark mode is untouched. ─────────────────────────────────── */
+
+/* 3a. Module text colors flip to dark light-mode equivalents
+   (html.light [data-module] — inherited by .module-badge, .mod-pill.active,
+   .suggest-mod, module-tinted .pill, .flow-list a.selected) */
+html.light [data-module="Sales"]        { --mod-clr: #0969da; }
+html.light [data-module="Procurement"]  { --mod-clr: #9a6700; }
+html.light [data-module="Production"]   { --mod-clr: #bc4c00; }
+html.light [data-module="Inventory"]    { --mod-clr: #1a7f37; }
+html.light [data-module="Project"]      { --mod-clr: #5b21b6; }
+html.light [data-module="Finance"]      { --mod-clr: #0550ae; }
+html.light [data-module="HR"]           { --mod-clr: #a40e8c; }
+html.light [data-module="Service"]      { --mod-clr: #0e7490; }
+
+/* 3b. Hardcoded dark-only colors */
+html.light .pill { color: var(--clr-blue); }
+html.light .match-reason { color: var(--clr-warning); }
+html.light .class3-badge { color: var(--clr-warning); }
+html.light .finder-error { color: var(--clr-danger); }
+
+/* 3d. Semantic badge light colors (bg tints are fine on white) */
+html.light .cat-badge.cat-crud       { color: #1a7f37; }
+html.light .cat-badge.cat-validation { color: #9a6700; }
+html.light .cat-badge.cat-init       { color: #0550ae; }
+html.light .cat-badge.cat-events     { color: #a40e8c; }
+html.light .cat-badge.cat-dataAccess { color: #0e7490; }
+html.light .cat-badge.cat-utility    { color: #57606a; }
+html.light .cat-badge.cat-static     { color: #c62828; }
+
+/* 3e. Invisible white-overlay backgrounds */
+html.light .cat-pill:hover { background: rgba(0, 0, 0, 0.05); }
+html.light .finder-note { background: rgba(154, 103, 0, 0.08); border-color: rgba(154, 103, 0, 0.25); }
+html.light .canonical-block,
+html.light .canonical-hint { background: var(--clr-accent-light-bg); border-color: var(--clr-border-accent); }
+html.light .finder-error { background: rgba(207, 34, 46, 0.08); border-color: rgba(207, 34, 46, 0.25); }

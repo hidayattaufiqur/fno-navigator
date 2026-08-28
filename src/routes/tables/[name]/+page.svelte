@@ -792,7 +792,7 @@
     z-index: 30;
     background: var(--clr-bg);
     padding: 6px 2px;
-    border-radius: 10px;
+    border-radius: var(--r-sm, 6px);
     max-width: 100%;
   }
   .toc-pill {
@@ -910,7 +910,7 @@
     font-size: 10px;
     font-weight: 600;
     padding: 2px 7px;
-    border-radius: 4px;
+    border-radius: var(--r-pill, 999px);
     background: var(--clr-surface-raised);
     border: 1px solid var(--clr-border);
     color: var(--clr-text-faint);
@@ -962,7 +962,7 @@
   .method-search {
     flex: 0 0 200px;
     padding: 6px 12px;
-    border-radius: 8px;
+    border-radius: var(--r-sm, 6px);
     border: 1px solid var(--clr-border);
     background: var(--clr-surface-raised);
     color: inherit;
@@ -992,6 +992,7 @@
   }
   .cat-pill:hover { background: rgba(255,255,255,0.07); color: var(--clr-text); }
   .cat-pill.active { background: var(--clr-accent-tint, rgba(79,195,247,0.15)); border-color: var(--clr-border-accent); color: var(--clr-blue-strong); }
+  :global(html.light) .cat-pill:hover { background: rgba(0,0,0,0.05); }
 
   /* Common-only pill toggle (DESIGN.md §/tables.5) */
   .common-pill { margin-left: auto; }
@@ -1023,7 +1024,7 @@
   }
 
   /* Category badge colours */
-  .method-badge { font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 4px; letter-spacing: 0.3px; white-space: nowrap; }
+  .method-badge { font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: var(--r-pill, 999px); letter-spacing: 0.3px; white-space: nowrap; }
   .cat-badge.cat-crud       { background: rgba(76,175,80,0.12);  border: 1px solid rgba(76,175,80,0.3);  color: var(--clr-green); }
   .cat-badge.cat-validation { background: rgba(255,152,0,0.12);  border: 1px solid rgba(255,152,0,0.3);  color: #ffb74d; }
   .cat-badge.cat-init       { background: rgba(33,150,243,0.12); border: 1px solid rgba(33,150,243,0.3); color: #64b5f6; }
@@ -1075,7 +1076,7 @@
   }
   .rel-sort-btn {
     padding: 2px 9px;
-    border-radius: 20px;
+    border-radius: var(--r-pill, 999px);
     border: 1px solid var(--clr-border);
     background: transparent;
     color: var(--clr-text-muted);
@@ -1087,7 +1088,7 @@
   .rel-sort-btn:hover { background: rgba(255,255,255,0.07); color: var(--clr-text); }
   .rel-sort-btn.active { background: var(--clr-accent-tint, rgba(79,195,247,0.15)); border-color: var(--clr-border-accent); color: var(--clr-blue-strong); }
 
-  html.light .rel-sort-btn:hover { background: rgba(0,0,0,0.05); }
+  :global(html.light) .rel-sort-btn:hover { background: rgba(0,0,0,0.05); }
 
   /* ── M3: List | Graph tabs + Sigma toolbar (mirrors /find) ── */
   .graph-tabs {
@@ -1191,7 +1192,7 @@
     text-align: center;
     color: var(--clr-text-faint);
     border: 1px dashed var(--clr-border);
-    border-radius: 8px;
+    border-radius: var(--r-md, 10px);
   }
   :global(html.light) .mod-pill:hover { background: rgba(0,0,0,0.05); }
 </style>

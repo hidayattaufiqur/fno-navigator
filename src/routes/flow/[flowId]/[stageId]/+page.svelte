@@ -314,7 +314,7 @@
     text-decoration: none;
     padding: 6px 10px;
     border: 1px solid var(--clr-border-subtle);
-    border-radius: 8px;
+    border-radius: var(--r-sm, 6px);
     transition: all 0.15s;
   }
   .step-nav-btn:hover {

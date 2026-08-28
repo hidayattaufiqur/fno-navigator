@@ -166,7 +166,7 @@
     background: var(--clr-surface-raised);
     color: var(--clr-text-muted);
     padding: 1px 7px;
-    border-radius: 10px;
+    border-radius: var(--r-pill, 999px);
   }
 
   /* Fixed top-right theme toggle (desktop only; mobile uses the top bar) */

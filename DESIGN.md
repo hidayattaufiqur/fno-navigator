@@ -212,6 +212,16 @@ components:
     textColor: "{colors.text-muted}"
     rounded: "{rounded.pill}"
     padding: 4px 12px
+  chip-pill:
+    backgroundColor: "{colors.accent-light-bg}"
+    textColor: "{colors.accent-light}"
+    rounded: "{rounded.pill}"
+    padding: 2px 8px
+  badge-light:
+    backgroundColor: "{colors.surface-raised}"
+    textColor: "{colors.text-muted}"
+    rounded: "{rounded.pill}"
+    padding: 2px 8px
 ---
 
 ## Overview
@@ -251,6 +261,10 @@ Surface archetype (claude-design "surface-first"):
 9. **No glass in light mode.** Light surfaces are solid; `backdrop-filter` only in dark.
 10. **Keep the graph.** Same features (module filter, system-FK toggle, expand, URL
     state). Only the chrome around it changes.
+11. **One radius per element.** Every rounded element consumes exactly one token
+    (sm 6 / md 10 / lg 14 / pill 999). Chips and badges are pills. No 4px chips.
+12. **Module colors flip in light mode.** `--mod-clr` pastels are dark-theme values;
+    light mode uses darker equivalents so module-tinted text keeps ≥ 4.5:1.
 
 ---
 
@@ -298,6 +312,12 @@ Surface archetype (claude-design "surface-first"):
 > Light-mode `faint` was the worst offender at 2.74:1; the new `#656d76` hits 4.9:1.
 > The dark-mode `curated` badge purple `#ab47bc` (3.93:1) is removed — curated rows use
 > the semantic `success` badge instead.
+>
+> **Module text colors flip in light mode** (dark pastels → darker equivalents so
+> module-tinted text keeps ≥ 4.5:1): Sales `#0969da` · Procurement `#9a6700` ·
+> Production `#bc4c00` · Inventory `#1a7f37` · Project `#5b21b6` · Finance `#0550ae` ·
+> HR `#a40e8c` · Service `#0e7490`. Applies to `module-badge`, `mod-pill.active`,
+> `suggest-mod`, and module-tinted `.pill`.
 
 ---
 
@@ -392,9 +412,20 @@ the page title is the largest text on the page (sidebar brand is demoted below i
 
 ## Shapes
 
-- Radius scale: `sm 6px` (buttons, inputs), `md 10px` (cards, toolbars), `lg 14px`
-  (title block, graph canvas), `pill` (chips, TOC, module filters).
-- One radius per component; no mixing inside a surface.
+- One radius token per element type — no mixing inside a surface:
+
+  | Token | Value | Applies to |
+  |---|---|---|
+  | `sm` | 6px | buttons, inputs, segmented controls, list rows, focus rings, ERD SVG nodes |
+  | `md` | 10px | cards, containers, tables, callouts, tooltips/popovers, dropdowns |
+  | `lg` | 14px | hero/title block, graph pane/canvas, stage pipeline |
+  | `pill` | 999px | chips, pills, badges, TOC, module filters, count chips |
+
+- All chips/badges are pill radius: `module-badge`, `.pill`, `.chip`, `cat-badge`,
+  `method-badge`, `suggest-mod`, canonical/class3/curated badges, `reason-chip`,
+  `rel-fields`, `rel-field`, `table-chip`, `match-reason`, `nav-link-count`.
+- ERD SVG nodes: `rx` 6px for satellite, center, and label rects (RelationGraph).
+- `50%` is reserved for dots and spinners only; `2px` for hamburger lines.
 
 ---
 
@@ -415,6 +446,13 @@ the page title is the largest text on the page (sidebar brand is demoted below i
 - `badge-semantic`: flat, muted, 10px uppercase — for "curated", "business flow",
   "sampled". One accent-free look; semantic color only when the badge IS the message
   (e.g. "shortest" is success-green, but only if it stays).
+
+### Chips (static info)
+- `chip-pill`: pill radius, tinted bg + colored text. One component, two flavors:
+  module-tinted (`module-badge`, module `.pill`, `suggest-mod`) and semantic
+  (`cat-badge`, class3, curated, `match-reason`, `reason-chip`). Light mode uses the
+  darker color variants (see Colors → Light).
+- All chips/badges are pill-shaped; none are 4px rectangles.
 
 ### Path rows (/find)
 - Row: rank (muted, tabular) + chain (table names, neutral ink, bold source/target,

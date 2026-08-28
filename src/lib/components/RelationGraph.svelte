@@ -343,7 +343,7 @@
         {@const rh = 24}
         <rect
           x={rx} y={ry}
-          width={labelWidth} height={rh} rx="4"
+          width={labelWidth} height={rh} rx="6"
           style="fill: var(--clr-label-bg); stroke: var(--clr-label-bd);"
           stroke-width="1"
           pointer-events="none"
@@ -375,7 +375,7 @@
         >
           <title>{satelliteName}</title>
           <rect
-            width={SATELLITE_NODE_W} height={SATELLITE_NODE_H} rx="5"
+            width={SATELLITE_NODE_W} height={SATELLITE_NODE_H} rx="6"
             style="fill: {isHovered ? 'var(--clr-node-sat-hover)' : 'var(--clr-surface)'}; stroke: {isHovered ? 'var(--clr-node-sat-hover-bd)' : 'var(--clr-node-sat-bd)'};"
             stroke-width="1"
           />
@@ -395,7 +395,7 @@
         role="presentation"
       >
         <rect
-          width={CENTER_NODE_W} height={CENTER_NODE_H} rx="7"
+          width={CENTER_NODE_W} height={CENTER_NODE_H} rx="6"
           style="fill: var(--clr-node-ctr); stroke: var(--clr-node-ctr-bd);"
           stroke-width="1.5"
         />
@@ -427,7 +427,7 @@
     position: relative;
     background: var(--clr-surface);
     border: 1px solid var(--clr-border);
-    border-radius: 8px;
+    border-radius: var(--r-md, 10px);
     overflow: hidden;
   }
 
@@ -448,7 +448,7 @@
     justify-content: center;
     background: var(--clr-surface-raised);
     border: 1px solid var(--clr-border);
-    border-radius: 4px;
+    border-radius: var(--r-sm, 6px);
     color: var(--clr-text-muted);
     font-size: 15px;
     cursor: pointer;
