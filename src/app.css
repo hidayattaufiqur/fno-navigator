@@ -930,6 +930,7 @@ a.node.active {
   font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
   color: var(--clr-blue);
   text-decoration: none;
+  overflow-wrap: anywhere;
 }
 .table-name:hover {
   color: var(--clr-blue-strong);
@@ -987,6 +988,8 @@ a.node.active {
   font-size: 13px;
   font-weight: 600;
   color: var(--clr-blue);
+  overflow-wrap: anywhere;   /* long table names must wrap inside the grid card (390px mobile) */
+  word-break: break-word;
 }
 .usage-count {
   color: var(--clr-text-muted);
