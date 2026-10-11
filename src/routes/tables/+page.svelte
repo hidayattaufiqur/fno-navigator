@@ -22,7 +22,12 @@
   let searchQuery = ''
   let moduleFilter = 'All'
 
-  $: allTableNames = Object.keys(tableUsageIndex).sort()
+  // Union of flow-stage tables and standalone tableDefs (def-only, e.g. SysTableIdTable,
+  // are reachable by URL and documented but appear in no stage). Reference-only rows carry
+  // no stage usage, so every read of tableUsageIndex must tolerate undefined.
+  $: allTableNames = Array.from(
+    new Set([...Object.keys(tableUsageIndex), ...Object.keys(tableDefs)])
+  ).sort()
 
   // Canonical module names for filter pills (≤8 clean names instead of 54 raw CDM strings)
   $: moduleOptions = [
@@ -99,7 +104,7 @@
     <div class="section-heading">{searchResults.length} result{searchResults.length !== 1 ? 's' : ''}</div>
     <div class="table-results">
       {#each searchResults as tableName}
-        {@const usages = tableUsageIndex[tableName]}
+        {@const usages = tableUsageIndex[tableName] ?? []}
         {@const tableDef = tableDefs[tableName]}
         {@const reason = matchReason(tableName, searchQuery.trim().toLowerCase())}
         <div class="table-result-group">
@@ -155,13 +160,17 @@
     <div class="table-browse-grid">
       {#each filteredTables as tableName}
         {@const tableDef = tableDefs[tableName]}
+        {@const usages = tableUsageIndex[tableName] ?? []}
         <a href="/tables/{tableName}" class="table-browse-item">
           <span class="table-name-sm">{tableName}</span>
           {#if tableDef}
             <span class="mini">{tableDef.description}</span>
+            {#if usages.length === 0}
+              <span class="mini usage-count">reference only</span>
+            {/if}
           {:else}
             <span class="mini usage-count"
-              >{tableUsageIndex[tableName].length} stage{tableUsageIndex[tableName].length !== 1
+              >{usages.length} stage{usages.length !== 1
                 ? 's'
                 : ''}</span
             >
