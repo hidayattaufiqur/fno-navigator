@@ -1,6 +1,7 @@
 <script>
   import { flows, tableDefs } from '$lib/data/flows'
-  import { canonicalModule } from '$lib/utils'
+  import { canonicalModule, missingTableIssueUrl } from '$lib/utils'
+  import { page } from '$app/stores'
 
   // Build a lookup: tableName → [{flowId, flowTitle, stageId, stageTitle}]
   // Done inline (not via +page.js) to avoid Svelte 5 legacy-mode prop issues.
@@ -132,7 +133,9 @@
       {/each}
     </div>
   {:else if searchQuery.trim().length >= 2}
-    <div class="empty">No tables match "{searchQuery.trim()}".</div>
+    <div class="empty">No tables match "{searchQuery.trim()}".
+      <a target="_blank" rel="noopener" href={missingTableIssueUrl(searchQuery.trim(), `/tables (${$page.url.href})`)}>Report missing table</a>
+    </div>
   {:else}
     <div class="module-filter-row">
       {#each moduleOptions as moduleOption}

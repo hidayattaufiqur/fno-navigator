@@ -2,7 +2,7 @@
   import { onMount, tick } from 'svelte'
   import { page } from '$app/stores'
   import { tableDefs } from '$lib/data/flows'
-  import { canonicalModule } from '$lib/utils'
+  import { canonicalModule, missingTableIssueUrl } from '$lib/utils'
   import { findState } from '$lib/stores/findState'
   import { fkLoadState, fkLoadError, loadFkMap, getAllFkTableNames } from '$lib/stores/fkMap'
   import { specificityLoadState, specificityLoadError, loadSpecificity } from '$lib/stores/specificity'
@@ -756,6 +756,11 @@
       <div class="finder-empty">
         <p data-tip={TOOLTIP_COPY['missing-note']} tabindex="0" aria-describedby="find-tip"><strong>{missing.join(', ')}</strong> {missing.length === 1 ? 'is' : 'are'} not in the 5,587-table dataset.</p>
         <p class="mini">Check the spelling, then try again. Table names are case-sensitive (for example SalesLine, CustTable).</p>
+        <p class="mini">
+          {#each missing as name, i}
+            <a target="_blank" rel="noopener" href={missingTableIssueUrl(name, `/find (${$page.url.href})`)}>Report {name}</a>{i < missing.length - 1 ? ' · ' : ''}
+          {/each}
+        </p>
       </div>
     {:else if pathResults.length === 0}
       <div class="finder-empty">
