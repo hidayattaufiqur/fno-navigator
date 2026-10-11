@@ -6025,4 +6025,220 @@ export const tableDefs: Record<string, TableDef> = {
     ],
   },
 
+  AgreementHeader: {
+    name: "AgreementHeader",
+    description: "Purchase and sales agreement (blanket order) header — the shared agreement framework header storing the classification, currency, validity window, and state of every agreement, whether it is a purchase agreement or a sales agreement. AgreementLine holds the committed quantities and prices beneath it.",
+    module: "Procurement and Sourcing",
+    docsUrl: "https://learn.microsoft.com/en-us/common-data-model/schema/core/operationscommon/tables/supplychain/procurementandsourcing/worksheetheader/agreementheader",
+    fields: [
+      { name: "AgreementClassification", type: "Int64", fkTarget: "AgreementClassification.RecId", note: "Agreement classification (purchase agreement, sales agreement, etc.) that determines which lines and defaults apply." },
+      { name: "Currency", type: "String", fkTarget: "Currency.CurrencyCode", note: "Currency for the agreement amounts; inherited by releases created against it." },
+      { name: "DefaultDimension", type: "Int64", fkTarget: "DimensionAttributeValueSet.RecId", note: "Default financial dimension set applied to releases when the line has no explicit dimensions." },
+      { name: "Language", type: "String", fkTarget: "LanguageTable.LanguageId", note: "Document language used for agreement printouts." },
+      { name: "Originator", type: "Int64", fkTarget: "DirPerson.RecId", note: "Person who originated the agreement (inside contact)." },
+      { name: "AgreementState", type: "Enum", note: "Lifecycle state: Draft / Effective / On hold / Expired / Closed — releases are only allowed while Effective." },
+      { name: "EarliestLineEffectiveDate", type: "Date", note: "Earliest effective date across all child lines; drives the agreement validity window shown in the UI." },
+      { name: "LatestLineExpirationDate", type: "Date", note: "Latest expiration date across all child lines." },
+    ],
+  },
+
+  AgreementLine: {
+    name: "AgreementLine",
+    description: "Agreement line — the committed quantity and price for one item, category, or project on an agreement header. Sales and purchase orders released against the agreement consume the committed amount and cannot exceed it when the max-enforced flag is set.",
+    module: "Procurement and Sourcing",
+    docsUrl: "https://learn.microsoft.com/en-us/common-data-model/schema/core/operationscommon/tables/supplychain/procurementandsourcing/worksheetline/agreementline",
+    fields: [
+      { name: "Agreement", type: "Int64", fkTarget: "AgreementHeader.RecId", note: "Parent agreement header this line belongs to." },
+      { name: "EffectiveDate", type: "Date", note: "Date the line becomes valid; releases before this date are rejected." },
+      { name: "ExpirationDate", type: "Date", note: "Date the line stops being valid." },
+      { name: "Category", type: "Int64", fkTarget: "EcoResCategory.RecId", note: "Procurement/sales category when the line is category-based rather than item-based." },
+      { name: "Currency", type: "String", fkTarget: "Currency.CurrencyCode", note: "Line currency; normally inherited from the header." },
+      { name: "InventDimId", type: "String", fkTarget: "InventDim.inventDimId", note: "Inventory dimension combination the commitment is restricted to (e.g. a specific site/warehouse)." },
+      { name: "ItemId", type: "String", fkTarget: "InventTable.ItemId", note: "Committed item; mutually exclusive with Category depending on AgreementLineProduct." },
+      { name: "ProjectProjId", type: "String", fkTarget: "ProjTable.ProjId", note: "Project the agreement line is tied to, for project purchase/sales agreements." },
+    ],
+  },
+
+  ForecastSales: {
+    name: "ForecastSales",
+    description: "Sales forecast (demand forecast) entry — one row per item/project forecast by model, period, and quantity. Master planning consumes these rows as independent demand so that planned orders cover forecast demand as well as actual sales orders. CDM display name: 'Sales forecast'.",
+    module: "Master Planning",
+    docsUrl: "https://learn.microsoft.com/en-us/common-data-model/schema/core/operationscommon/tables/supplychain/masterplanning/worksheetline/forecastsales",
+    fields: [
+      { name: "Currency", type: "String", fkTarget: "Currency.CurrencyCode", note: "Currency of the forecasted sales amount." },
+      { name: "ModelId", type: "String", fkTarget: "ForecastModel.ModelId", note: "Forecast model the entry belongs to; master plans reference one or more models for demand reduction." },
+      { name: "StartDate", type: "Date", note: "Start of the forecast bucket; combined with Freq/FreqCode to derive the requirement date." },
+      { name: "ItemId", type: "String", fkTarget: "InventTable.ItemId", note: "Forecasted item; null for pure project-fee forecasts." },
+      { name: "CustAccountId", type: "String", fkTarget: "CustTable.AccountNum", note: "Customer the forecasted demand is attributed to, when known." },
+      { name: "ProjId", type: "String", fkTarget: "ProjTable.ProjId", note: "Project the forecast is booked against, for project demand forecasting." },
+      { name: "InventDimId", type: "String", fkTarget: "InventDim.inventDimId", note: "Inventory dimensions (site/warehouse) the forecasted demand is planned for." },
+      { name: "SalesQty", type: "Real", note: "Forecasted sales quantity in SalesUnitId for the bucket." },
+    ],
+  },
+
+  InventCostList: {
+    name: "InventCostList",
+    description: "Inventory cost calculation work list — transient rows the inventory closing and recalculation process writes while it walks the BOM levels for one voucher. Each row records the item, BOM level, and iteration the cost run is currently at; rows are consumed and cleared as the run progresses.",
+    module: "Inventory Management",
+    docsUrl: "https://learn.microsoft.com/en-us/common-data-model/schema/core/operationscommon/tables/supplychain/inventory/transactionline/inventcostlist",
+    fields: [
+      { name: "Voucher", type: "String", note: "Voucher of the inventory closing/recalculation run this work-list row belongs to." },
+      { name: "ItemId", type: "String", fkTarget: "InventTable.ItemId", note: "Item whose cost is being calculated." },
+      { name: "Bundle", type: "Int64", fkTarget: "InventCostBundleList.RecId", note: "Cost bundle the row was grouped into for parallel processing." },
+      { name: "InventCostListItemStatus", type: "Enum", note: "Processing status of the row (not started / in progress / done)." },
+      { name: "BOMLevel", type: "Int", note: "BOM explosion level being costed — low-level items are costed before their parents." },
+      { name: "NumOfIteration", type: "Int", note: "Iteration counter for items that require repeated costing passes." },
+      { name: "StartDateTime", type: "UtcDateTime", note: "Timestamp the row started processing." },
+      { name: "EndDateTime", type: "UtcDateTime", note: "Timestamp the row finished processing." },
+    ],
+  },
+
+  LedgerConsolidateHist: {
+    name: "LedgerConsolidateHist",
+    description: "General ledger consolidation history — one row per consolidation run performed for a legal entity, recording the template used, the date range consolidated, the originating company, and whether the result was reviewed or reversed. LedgerConsolidateHistRef links each run to the consolidation transactions it produced.",
+    module: "General Ledger / Consolidations",
+    docsUrl: "https://learn.microsoft.com/en-us/dynamics365/finance/general-ledger/financial-consolidations-currency-translation",
+    fields: [
+      { name: "ConsolidateTemplate", type: "Int64", fkTarget: "LedgerConsolidateTemplate.RecId", note: "Consolidation template that defined the accounts, ranges, and options used for this run." },
+      { name: "CompanyIdOrigin", type: "String", fkTarget: "DataArea.id", note: "Source legal entity whose transactions were consolidated into the current company." },
+      { name: "BatchJobId", type: "Int64", fkTarget: "BatchJob.RecId", note: "Batch job that executed the consolidation, when run in batch." },
+      { name: "Description", type: "String", note: "Free-text description of the consolidation run." },
+      { name: "FromDate", type: "Date", note: "Start of the transaction date range that was consolidated." },
+      { name: "ToDate", type: "Date", note: "End of the transaction date range that was consolidated." },
+      { name: "ProcessDateTime", type: "UtcDateTime", note: "When the consolidation was processed." },
+      { name: "Reviewed", type: "Enum", note: "Whether a reviewer has signed off the run; once reviewed, Notes can no longer be edited." },
+    ],
+  },
+
+  LedgerConsolidateTemplate: {
+    name: "LedgerConsolidateTemplate",
+    description: "Consolidation template — defines one reusable set of consolidation options: which account range and amount source to take from the source company, the target account range, the exchange-rate type for currency translation, and whether budget or actual balances are transferred.",
+    module: "General Ledger / Consolidations",
+    docsUrl: "https://learn.microsoft.com/en-us/dynamics365/finance/general-ledger/financial-consolidations-currency-translation",
+    fields: [
+      { name: "Name", type: "String", note: "Template identifier selected when a consolidation is run." },
+      { name: "BudgetExchangeRateType", type: "Int64", fkTarget: "ExchangeRateType.RecId", note: "Exchange-rate type used to translate budget balances when TransferBudget is enabled." },
+      { name: "ConsolidateAccountGroup", type: "Int64", fkTarget: "LedgerConsolidateAccountGroup.RecId", note: "Consolidation account group used to map source accounts to target accounts." },
+      { name: "Description", type: "String", note: "Human-readable description of what the template does." },
+      { name: "ConsolidateAccountSource", type: "Enum", note: "Selects whether accounts come from the consolidation account group or directly from the source accounts." },
+      { name: "ProcessMode", type: "Enum", note: "Whether to transfer transactions (detailed) or only balances (summarised) during consolidation." },
+      { name: "FromAccount", type: "String", fkTarget: "MainAccount.MainAccountId", note: "Start of the main account range to consolidate from the source company." },
+      { name: "ToAccount", type: "String", fkTarget: "MainAccount.MainAccountId", note: "End of the main account range to consolidate from the source company." },
+    ],
+  },
+
+  MarkupAutoTable: {
+    name: "MarkupAutoTable",
+    description: "Automatic charges setup — one row per rule that tells the system to add a charge line (markup) automatically to a purchase or sales order header/line. Each rule is a polymorphic combination: an account code/relation (customer, vendor, or group), an item code/relation (item, item group, or all), a delivery-mode code/relation, and an optional channel, matched by module type. CDM display name: 'Auto charges'.",
+    module: "Procurement and Sourcing",
+    docsUrl: "https://learn.microsoft.com/en-us/common-data-model/schema/core/operationscommon/tables/supplychain/procurementandsourcing/group/markupautotable",
+    fields: [
+      { name: "AccountCode", type: "Enum", note: "Granularity of the account match: All / Table (one account) / Group / Payer." },
+      { name: "AccountRelation", type: "String", fkTarget: "CustTable.AccountNum", note: "The account matched by AccountCode — a customer/vendor account or a group id, depending on the code." },
+      { name: "ItemCode", type: "Enum", note: "Granularity of the item match: All / Table (one item) / Group / Category." },
+      { name: "ItemRelation", type: "String", fkTarget: "InventTable.ItemId", note: "The item matched by ItemCode — an item id, item group, or category id." },
+      { name: "DlvModeCode", type: "Enum", note: "Granularity of the delivery-mode match: All / Table / Group." },
+      { name: "DlvModeRelation", type: "String", fkTarget: "DlvMode.Code", note: "The delivery mode or delivery-mode group this rule applies to." },
+      { name: "ModuleType", type: "Enum", note: "Where the rule fires: Sales order / Purchase order / Project / Service order / Return order." },
+      { name: "ModuleCategory", type: "Enum", note: "Whether the charge lands on the order header or on each order line." },
+    ],
+  },
+
+  ProjInvoiceJour: {
+    name: "ProjInvoiceJour",
+    description: "Posted project invoice journal — the posted customer invoice header for project billing, holding invoice totals, tax, currency and exchange rate, payment terms, and the print/electronic-invoice state. One row per posted project invoice; ProjInvoiceTrans and the per-type line tables (ProjInvoiceEmpl/Item/Cost/Revenue/OnAcc) link back to it by ProjInvoiceId.",
+    module: "Project Management and Accounting",
+    docsUrl: "https://learn.microsoft.com/en-us/common-data-model/schema/core/operationscommon/tables/professionalservices/projectmanagementandaccounting/transaction/projinvoicejour",
+    fields: [
+      { name: "InvoiceDate", type: "Date", note: "Invoice document date used for posting and aging." },
+      { name: "ProjInvoiceId", type: "String", note: "Primary key — posted project invoice number from the number sequence." },
+      { name: "InvoiceAccount", type: "String", fkTarget: "CustTable.AccountNum", note: "Customer account that is invoiced; may differ from the order account in third-party billing." },
+      { name: "OrderAccount", type: "String", fkTarget: "CustTable.AccountNum", note: "Customer account the work was ordered by." },
+      { name: "CurrencyId", type: "String", fkTarget: "Currency.CurrencyCode", note: "Invoice transaction currency." },
+      { name: "ProjInvoiceProjId", type: "String", fkTarget: "ProjInvoiceTable.ProjInvoiceProjId", note: "Billing contract (project contract) the invoice was issued under." },
+      { name: "ProposalId", type: "String", fkTarget: "ProjProposalJour.ProposalId", note: "Invoice proposal the posted invoice was created from." },
+      { name: "InvoiceAmount", type: "Real", note: "Invoice total in the transaction currency, excluding the rounding-off adjustment." },
+    ],
+  },
+
+  ReqPlanVersion: {
+    name: "ReqPlanVersion",
+    description: "Master plan version — identifies one versioned snapshot of a master plan's output. Master planning writes ReqTrans rows tagged with the version, letting planners compare scenarios and firm planned orders from a specific version. CDM display name: 'Master plan versions'.",
+    module: "Master Planning",
+    docsUrl: "https://learn.microsoft.com/en-us/dynamics365/supply-chain/master-planning/coverage-settings",
+    fields: [
+      { name: "Active", type: "Enum", note: "Whether this plan version is the active one used as the default view for net requirements." },
+      { name: "ReqPlanDataAreaId", type: "String", fkTarget: "ReqPlan.dataAreaId", note: "Legal entity the plan version belongs to." },
+      { name: "ReqPlanId", type: "String", note: "Master plan the version was generated by." },
+      { name: "LastCostCalculationDateTime", type: "UtcDateTime", note: "When costing was last calculated for this version." },
+      { name: "SysRowVersionNumber", type: "Int64", note: "Internal row-version token used for optimistic concurrency." },
+    ],
+  },
+
+  ResResourceIdentifier: {
+    name: "ResResourceIdentifier",
+    description: "Resource identifier — maps a project/operations resource to the record it represents via a generic (RefTableId, RefRecId) pair. A resource can point at a worker (HcmWorker), a machine or work centre (WrkCtrTable), or another resource table; this indirection is what lets one resource pool mix people and equipment.",
+    module: "Project Management and Accounting",
+    fields: [
+      { name: "RefRecId", type: "Int64", fkTarget: "WrkCtrTable.RecId", note: "Surrogate key of the underlying record the resource stands for." },
+      { name: "RefTableId", type: "Int", note: "Table id of the underlying record; together with RefRecId forms the polymorphic resource pointer." },
+    ],
+  },
+
+  SMADispatchTeamTable: {
+    name: "SMADispatchTeamTable",
+    description: "Service dispatch team — a named team of service technicians used by the dispatch board to assign service activities. The team has an owner (the responsible worker) and members defined in the related dispatch team member table.",
+    module: "Service Management",
+    docsUrl: "https://learn.microsoft.com/en-us/common-data-model/schema/core/operationscommon/tables/supplychain/servicemanagement/group/smadispatchteamtable",
+    fields: [
+      { name: "DispatchTeamId", type: "String", note: "Primary key — team identifier shown on the dispatch board." },
+      { name: "WorkerOwner", type: "Int64", fkTarget: "HcmWorker.RecId", note: "Worker who owns the team and is responsible for its activities." },
+      { name: "Description", type: "String", note: "Free-text description of the team's purpose or coverage area." },
+    ],
+  },
+
+  WHSCycleCountPlan: {
+    name: "WHSCycleCountPlan",
+    description: "Warehouse cycle count plan — a recurring instruction to count the on-hand inventory that matches a location query and an item query, on the schedule defined by DaysBetween, creating cycle count work when it runs. The plan names the work pool and work template used to generate the counting work.",
+    module: "Warehouse Management",
+    docsUrl: "https://learn.microsoft.com/en-us/common-data-model/schema/core/operationscommon/tables/supplychain/inventory/main/whscyclecountplan",
+    fields: [
+      { name: "CycleCountPlanId", type: "String", note: "Primary key — cycle count plan identifier." },
+      { name: "WorkPoolId", type: "String", fkTarget: "WHSWorkPool.WorkPoolId", note: "Work pool that counting work generated by this plan is assigned to." },
+      { name: "WorkTemplateCode", type: "String", fkTarget: "WHSWorkTemplateTable.WorkTemplateCode", note: "Work template controlling the counting work's steps and directives." },
+      { name: "Description", type: "String", note: "Free-text description of the plan." },
+      { name: "DaysBetween", type: "Int", note: "Number of days between successive count runs." },
+      { name: "MaxCounts", type: "Int", note: "Maximum number of counting lines the plan may generate per run — caps the workload." },
+      { name: "ItemQuery", type: "Container", note: "Packed query selecting which items the plan counts." },
+      { name: "LocationQuery", type: "Container", note: "Packed query selecting which locations the plan counts." },
+    ],
+  },
+
+  WHSWorkLineCycleCount: {
+    name: "WHSWorkLineCycleCount",
+    description: "Cycle count work line — the counting instruction for one item/location/license-plate combination on a warehouse cycle count work order. Holds the expected quantity, the quantity the worker counted, and the reconciliation flag indicating whether the count matched or triggered an adjustment.",
+    module: "Warehouse Management",
+    docsUrl: "https://learn.microsoft.com/en-us/common-data-model/schema/core/operationscommon/tables/supplychain/inventory/worksheetline/whsworklinecyclecount",
+    fields: [
+      { name: "InventDimId", type: "String", fkTarget: "InventDim.inventDimId", note: "Inventory dimensions (location, license plate, status) being counted." },
+      { name: "ItemId", type: "String", fkTarget: "InventTable.ItemId", note: "Item being counted at this location." },
+      { name: "LineNum", type: "Real", fkTarget: "WHSWorkLine.LineNum", note: "Line number within the parent counting work order." },
+      { name: "WorkId", type: "String", fkTarget: "WHSWorkTable.WorkId", note: "Parent cycle count work order." },
+      { name: "QtyCounted", type: "Real", note: "Quantity the worker physically counted." },
+      { name: "QtyExpected", type: "Real", note: "On-hand quantity the system expected at the location." },
+      { name: "CountingReasonCode", type: "String", fkTarget: "InventCountingReasonCode.ReasonCode", note: "Reason code explaining why an adjustment was accepted." },
+      { name: "CycleCountCounted", type: "Enum", note: "Whether the line has already been counted." },
+    ],
+  },
+
+  SysTableIdTable: {
+    name: "SysTableIdTable",
+    description: "System table id lookup — maps every table's numeric table id to its table name. Reflects the application's table-id allocation and is used by the generic reference framework (RefTableId) to resolve which table a RecId belongs to.",
+    module: "System Administration – Security",
+    fields: [
+      { name: "Id", type: "Int", note: "Numeric table id assigned at compile time; the value stored in RefTableId columns." },
+      { name: "Name", type: "String", note: "Table name that the numeric id resolves to." },
+    ],
+  },
+
 }
