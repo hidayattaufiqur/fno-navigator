@@ -42,3 +42,23 @@ export function canonicalModule(raw) {
   if (r.includes('service')) return 'Service'
   return null
 }
+
+/**
+ * Prefilled GitHub issue URL for reporting a table missing from the dataset.
+ * Zero backend: plain link, no labels param (the label may not exist; never create via API).
+ *
+ * @param {string} name table name as typed
+ * @param {string} where route + URL where the user saw it
+ * @returns {string}
+ */
+export function missingTableIssueUrl(name, where) {
+  const title = `missing-table: ${name}`
+  const body = [
+    `Table: ${name}`,
+    `Seen at: ${where}`,
+    'Expected: this table to exist in the dataset',
+    'Contact (optional): ',
+  ].join('\n')
+  const q = new URLSearchParams({ title, body })
+  return `https://github.com/hidayattaufiqur/fno-navigator/issues/new?${q.toString()}`
+}
