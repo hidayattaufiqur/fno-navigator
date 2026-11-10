@@ -95,6 +95,15 @@
         placeholder="e.g. SalesTable, CustTrans, InventTrans"
         bind:value={searchQuery}
       />
+      <a
+        class="report-missing"
+        target="_blank"
+        rel="noopener"
+        href={missingTableIssueUrl(
+          searchQuery.trim().length >= 2 ? searchQuery.trim() : '<table name>',
+          `/tables (${$page.url.href})`
+        )}
+      >Can't find it? Report a missing table</a>
     </div>
   </div>
 </header>
