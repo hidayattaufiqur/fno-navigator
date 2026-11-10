@@ -895,6 +895,23 @@ a.node.active {
 .search-standalone {
   min-width: 360px;
 }
+
+/* Report-a-missing-table affordance under the search box (issue #10): always
+   reachable, not only after a zero-result search. Subtle until hover — it is a
+   fallback, not a primary action. */
+.report-missing {
+  align-self: flex-start;
+  font-size: 12px;
+  color: var(--clr-text-muted);
+  text-decoration: none;
+  border-bottom: 1px dashed var(--clr-border);
+  padding-bottom: 1px;
+  transition: color 0.15s, border-color 0.15s;
+}
+.report-missing:hover {
+  color: var(--clr-blue);
+  border-bottom-color: var(--clr-blue);
+}
 .tables-section {
   display: flex;
   flex-direction: column;
