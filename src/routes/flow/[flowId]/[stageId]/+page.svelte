@@ -27,7 +27,15 @@
       ? flow.stages
       : flow.stages.filter((stage) => stage.roles.includes(roleFilter))
 
-  $: currentIndex = filteredStages.findIndex((stageItem) => stageItem.id === stage.id)
+  // Prev/Next follows the happy path: optional branches are skipped unless you
+  // are standing on one, so the buttons never imply a return or a dunning run
+  // happens on every sale.
+  $: navStages = stage.optional ? filteredStages : filteredStages.filter((s) => !s.optional)
+  $: currentIndex = navStages.findIndex((stageItem) => stageItem.id === stage.id)
+
+  // Array order puts branches next to unrelated stages (returns|payment,
+  // payment|collections). Only flow.edges knows which pairs are real steps.
+  $: edgeSet = new Set((flow.edges ?? []).map((e) => `${e.from}>${e.to}`))
 
   // ── Stage relation graph ────────────────────────────────────────────────────
 
@@ -67,7 +75,10 @@
       <span class="module-badge" data-module={flow.module}>{flow.module}</span>
       <span class="eyebrow">{flow.title}</span>
     </div>
-    <h2 class="stage-heading">{stage.title}</h2>
+    <h2 class="stage-heading">
+      {stage.title}
+      {#if stage.optional}<span class="optional-badge" title="Optional branch — not on the happy path">optional</span>{/if}
+    </h2>
     <p class="lede">{stage.description}</p>
     <div class="chips">
       {#each stage.roles as role}
@@ -86,14 +97,14 @@
     </label>
     {#if currentIndex > 0}
       <a
-        href="/flow/{flow.id}/{filteredStages[currentIndex - 1].id}"
+        href="/flow/{flow.id}/{navStages[currentIndex - 1].id}"
         class="step-nav-btn"
         aria-label="Previous stage"
       >← Prev</a>
     {/if}
-    {#if currentIndex < filteredStages.length - 1}
+    {#if currentIndex < navStages.length - 1}
       <a
-        href="/flow/{flow.id}/{filteredStages[currentIndex + 1].id}"
+        href="/flow/{flow.id}/{navStages[currentIndex + 1].id}"
         class="step-nav-btn"
         aria-label="Next stage"
       >Next →</a>
@@ -106,6 +117,8 @@
     <div class="mini">No stages match this role.</div>
   {:else}
     {#each filteredStages as stageItem, i}
+      {@const nextStage = filteredStages[i + 1]}
+      {@const linked = nextStage ? edgeSet.has(`${stageItem.id}>${nextStage.id}`) : false}
       <div class="pipeline-step">
         <a
           href="/flow/{flow.id}/{stageItem.id}"
@@ -114,15 +127,19 @@
           aria-current={stage.id === stageItem.id ? 'page' : undefined}
           title="{stageItem.title}"
         >
-          <span class="step-num">Step {i + 1}</span>
+          <span class="step-num">
+            {stageItem.optional ? 'Optional' : `Step ${filteredStages.slice(0, i + 1).filter((x) => !x.optional).length}`}
+          </span>
           <span class="step-title">{stageItem.title}</span>
           <span class="pill" style="font-size:10px;padding:2px 6px;">{stageItem.roles.join(', ')}</span>
         </a>
         <div
           class="pipeline-arrow"
-          class:hidden={i === filteredStages.length - 1}
+          class:hidden={!nextStage}
+          class:branch={linked && nextStage.optional}
+          class:gap={nextStage && !linked}
           aria-hidden="true"
-        >→</div>
+        >{!nextStage ? '' : linked ? (nextStage.optional ? '↳' : '→') : '·'}</div>
       </div>
     {/each}
   {/if}
@@ -161,6 +178,9 @@
                     {/each}
                   </div>
                 {/if}
+                {#if rel.badge}
+                  <p class="rel-badge">{rel.badge}</p>
+                {/if}
                 {#if rel.note}
                   <p class="rel-note">{rel.note}</p>
                 {/if}
@@ -184,6 +204,9 @@
                     <div class="rel-fields-row">
                       <code class="rel-field">{rel.fields[0]}</code>
                     </div>
+                  {/if}
+                  {#if rel.badge}
+                    <p class="rel-badge">{rel.badge}</p>
                   {/if}
                 </div>
               {/each}

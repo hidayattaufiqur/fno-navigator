@@ -8,8 +8,11 @@ export type Stage = {
   pitfalls: string[]
   prerequisites: string[]
   tables: string[]
-  relations?: { from: string; to: string; note?: string; fields?: string[] }[]
+  /** Conditional-FK / polymorphic badge, e.g. "conditional FK — requires AccountCode" */
+  relations?: { from: string; to: string; note?: string; fields?: string[]; badge?: string }[]
   approvals?: string[]
+  /** Off the happy path: a branch, not a mandatory sequential step */
+  optional?: boolean
 }
 
 export type Flow = {
@@ -94,7 +97,7 @@ export const flows: Flow[] = [
           }
         ],
         pitfalls: [
-          'Customer credit limit missing or zero — quote can be confirmed but SO may fail credit check',
+          'A zero credit limit blocks only when CustTable.MandatoryCreditLimit = Yes — an unset limit is not a zero-limit block',
           'Price/discount agreement not active for the quote date — wrong price pulled',
           'Expiry date not set — quote stays open indefinitely',
         ],
@@ -122,17 +125,17 @@ export const flows: Flow[] = [
           {
             from: 'PriceDiscAdmTrans',
             to: 'PriceDiscTable',
-            fields: ['PriceDiscAdmTrans.PriceDiscTableRecId → PriceDiscTable.RecId'],
-            note: 'Active trade-agreement lines are stored in PriceDiscAdmTrans; the journal source is PriceDiscTable',
+            fields: ['PriceDiscAdmTrans.PriceDiscTableRef → PriceDiscTable.RecId'],
+            note: 'Active trade-agreement lines are stored in PriceDiscAdmTrans; PriceDiscTableRef is the actual reference to the price/discount journal source row',
           },
         ],
         approvals: ['Quote approval workflow'],
       },
       {
         id: 'so',
-        title: 'Confirm Sales Order',
-        description: 'Convert quote (or create directly) into a confirmed sales order, setting delivery dates, dimensions, and inventory reservations.',
-        roles: ['Sales', 'CSR'],
+        title: 'Create Sales Order',
+        description: 'Convert a quote (or create directly) into a sales order, setting delivery dates, dimensions, and inventory reservations. Confirmation is a separate posting event.',
+        roles: ['Sales'],
         menuPaths: ['Sales and marketing > Sales orders > All sales orders'],
         docs: [
           {
@@ -150,7 +153,7 @@ export const flows: Flow[] = [
           'SalesTable.InvoiceAccount ≠ CustAccount — the invoice goes to a different customer than the order',
         ],
         prerequisites: ['Released product (InventTable)', 'Site and warehouse configured'],
-        tables: ['SalesTable', 'SalesLine', 'CustTable', 'InventDim', 'InventTable', 'AgreementHeader', 'AgreementLine', 'CustConfirmJour', 'CustConfirmTrans'],
+        tables: ['SalesTable', 'SalesLine', 'CustTable', 'InventDim', 'InventTable', 'AgreementHeader', 'AgreementLine', 'SalesAgreementHeader'],
         relations: [
           {
             from: 'SalesTable',
@@ -180,7 +183,8 @@ export const flows: Flow[] = [
             from: 'SalesTable',
             to: 'AgreementHeader',
             fields: ['SalesTable.MatchingAgreement → AgreementHeader.RecId'],
-            note: 'A sales order can be released against a sales agreement; SalesTable.MatchingAgreement FK references AgreementHeader.RecId (sales agreement classification) to inherit agreed pricing and quantity commitments',
+            badge: 'conditional FK — requires AgreementClassification = the sales classification',
+            note: 'A sales order can be released against an agreement; MatchingAgreement references the generic AgreementHeader, whose AgreementClassification discriminates the agreement type (SalesAgreementHeader is the sales subtype that carries CustAccount and SalesNumberSequence)',
           },
           {
             from: 'AgreementLine',
@@ -188,20 +192,41 @@ export const flows: Flow[] = [
             fields: ['AgreementLine.Agreement → AgreementHeader.RecId'],
             note: 'Each AgreementLine specifies a quantity or value commitment for one item under the parent AgreementHeader',
           },
+        ],
+        approvals: ['Configured customer credit check'],
+      },
+      {
+        id: 'confirm',
+        title: 'Confirm Sales Order',
+        description: 'Post the order confirmation to the customer. This is the posting event that creates CustConfirmJour/CustConfirmTrans — order entry itself does not produce them.',
+        roles: ['CSR'],
+        menuPaths: ['Sales and marketing > Sales orders > All sales orders'],
+        docs: [
+          {
+            title: 'Confirm sales orders',
+            url: 'https://learn.microsoft.com/dynamics365/supply-chain/sales-marketing/tasks/confirm-sales-orders',
+          },
+        ],
+        pitfalls: [
+          'CustTable.Blocked, CreditMax, MandatoryCreditLimit and CreditRating determine whether confirmation or posting is held — a configured credit check, not a manual approval on every order',
+          'Confirmation posting is skipped when the order is already confirmed — CustConfirmJour holds one row per confirmation posting, not one per order',
+        ],
+        prerequisites: ['Sales order created', 'Confirmation print/Posting setup (Print management)'],
+        tables: ['SalesTable', 'CustConfirmJour', 'CustConfirmTrans'],
+        relations: [
           {
             from: 'CustConfirmJour',
             to: 'SalesTable',
-            fields: ['CustConfirmJour.SalesId = SalesTable.SalesId'],
+            fields: ['CustConfirmJour.SalesId → SalesTable.SalesId'],
             note: 'Posting a sales order confirmation creates a CustConfirmJour header with CustConfirmTrans lines',
           },
           {
             from: 'CustConfirmTrans',
             to: 'CustConfirmJour',
-            fields: ['CustConfirmTrans.ConfirmId = CustConfirmJour.ConfirmId', 'CustConfirmTrans.SalesId = SalesTable.SalesId'],
-            note: 'Line detail for a sales order confirmation; one row per confirmed order line',
+            fields: ['CustConfirmTrans.ConfirmId → CustConfirmJour.ConfirmId', 'CustConfirmTrans.SalesId → SalesTable.SalesId'],
+            note: 'Line detail for a sales order confirmation; one row per confirmed order line, with SalesId retained as order context',
           },
         ],
-        approvals: ['Credit check or order approval workflow'],
       },
       {
         id: 'pickpack',
@@ -229,7 +254,7 @@ export const flows: Flow[] = [
           'Location directive not covering the item type or zone',
         ],
         prerequisites: ['Location directives', 'Work templates', 'Wave templates'],
-        tables: ['WHSWorkTable', 'WHSWorkLine', 'WHSShipmentTable', 'WHSLoadTable', 'InventTrans', 'CustPackingSlipJour', 'CustPackingSlipTrans'],
+        tables: ['WHSWorkTable', 'WHSWorkLine', 'WHSShipmentTable', 'WHSLoadTable', 'InventTrans', 'InventTransOrigin', 'WMSPickingRoute', 'CustPackingSlipJour', 'CustPackingSlipTrans'],
         relations: [
           {
             from: 'WHSWorkLine',
@@ -257,9 +282,15 @@ export const flows: Flow[] = [
           },
           {
             from: 'WHSWorkLine',
-            to: 'InventTrans',
-            fields: ['Linked via ItemId + inventDimId + work context (no direct FK)'],
-            note: 'Picking writes InventTrans records; StatusIssue goes Picked → Sold when the invoice is posted',
+            to: 'InventTransOrigin',
+            fields: ['WHSWorkLine.InventTransId → InventTransOrigin.InventTransId'],
+            note: 'There is no direct WHSWorkLine → InventTrans FK. Work lines carry the inventory transaction id, and InventTransOrigin is the identity record that ties it to the item, dimensions and source document',
+          },
+          {
+            from: 'InventTrans',
+            to: 'InventTransOrigin',
+            fields: ['InventTrans.InventTransOrigin → InventTransOrigin.RecId'],
+            note: 'The second hop of the path: InventTrans references InventTransOrigin by RecId, so WHSWorkLine → InventTransOrigin → InventTrans reaches the inventory transactions. StatusIssue goes Picked → Sold when the invoice is posted',
           },
           {
             from: 'CustPackingSlipJour',
@@ -271,16 +302,25 @@ export const flows: Flow[] = [
             from: 'CustPackingSlipTrans',
             to: 'CustPackingSlipJour',
             fields: ['CustPackingSlipTrans.PackingSlipId = CustPackingSlipJour.PackingSlipId', 'CustPackingSlipTrans.SalesId = SalesTable.SalesId'],
-            note: 'Line detail for a delivery note; one row per shipped item line, links to InventTrans for inventory tracking',
+            note: 'Line detail for a delivery note; one row per shipped item line',
+          },
+          {
+            from: 'CustPackingSlipTrans',
+            to: 'InventTransOrigin',
+            fields: ['CustPackingSlipTrans.InventTransId → InventTransOrigin.InventTransId'],
+            note: 'Shipped lines reach InventTrans through InventTransOrigin by inventory transaction id, not by a direct FK',
           },
         ],
       },
       {
         id: 'invoice',
         title: 'Post Invoice',
-        description: 'Generate and post a customer invoice, creating AR subledger (CustTrans) and general-ledger entries.',
+        description: 'Generate and post a customer invoice — from a sales order or as a free-text invoice — creating the AR subledger (CustTrans) and the general-ledger entries.',
         roles: ['AR'],
-        menuPaths: ['Accounts receivable > Invoices > Open customer invoices'],
+        menuPaths: [
+          'Sales and marketing > Sales orders > All sales orders',
+          'Accounts receivable > Invoices > All free text invoices',
+        ],
         docs: [
           {
             title: 'Customer invoicing',
@@ -294,16 +334,16 @@ export const flows: Flow[] = [
         pitfalls: [
           'Posting profile missing for the customer group — invoice post will error',
           'Sales tax group / item tax group mismatch produces wrong tax amount',
-          'CustInvoiceTable (pending/unposted) vs CustInvoiceJour (posted) — two different tables, easy to confuse in extensions',
+          'CustInvoiceTable/CustInvoiceLine are pending free-text invoice records; CustInvoiceJour/CustInvoiceTrans are posted invoice records. Free-text invoices are not sourced from SalesTable/SalesLine',
         ],
         prerequisites: ['Customer posting profiles', 'Sales tax codes and groups'],
-        tables: ['CustInvoiceJour', 'CustInvoiceTrans', 'CustTrans', 'TaxTrans', 'LedgerTrans', 'TaxTable', 'TaxGroupHeading', 'TaxItemGroupHeading'],
+        tables: ['CustInvoiceJour', 'CustInvoiceTrans', 'CustInvoiceTable', 'CustInvoiceLine', 'CustTrans', 'TaxTrans', 'GeneralJournalEntry', 'GeneralJournalAccountEntry', 'SubledgerVoucherGeneralJournalEntry', 'SpecTrans', 'TaxTable', 'TaxGroupHeading', 'TaxItemGroupHeading'],
         relations: [
           {
             from: 'CustInvoiceJour',
             to: 'SalesTable',
             fields: ['CustInvoiceJour.SalesId → SalesTable.SalesId'],
-            note: 'Posted invoice header references the originating sales order',
+            note: 'Posted invoice header references the originating sales order; free-text invoices leave SalesId empty',
           },
           {
             from: 'CustInvoiceTrans',
@@ -318,10 +358,34 @@ export const flows: Flow[] = [
             note: 'Each invoice line traces back to the originating sales order',
           },
           {
+            from: 'CustInvoiceLine',
+            to: 'CustInvoiceTable',
+            fields: ['CustInvoiceLine.ParentRecId → CustInvoiceTable.RecId'],
+            note: 'Pending free-text invoice lines belong to their unposted CustInvoiceTable header; posting moves them to CustInvoiceJour/CustInvoiceTrans',
+          },
+          {
             from: 'CustInvoiceJour',
             to: 'CustTrans',
-            fields: ['CustTrans.Invoice = CustInvoiceJour.InvoiceId', 'CustTrans.AccountNum = CustInvoiceJour.OrderAccount'],
-            note: 'Posting creates an open CustTrans debit record; it stays open until payment and settlement close it',
+            fields: ['CustTrans.Invoice = CustInvoiceJour.InvoiceId', 'CustTrans.AccountNum = CustInvoiceJour.InvoiceAccount'],
+            note: 'Posting creates an open CustTrans debit record; it stays open until payment and settlement close it. The AR account is the invoiced account, which may differ from the ordering account',
+          },
+          {
+            from: 'CustInvoiceJour',
+            to: 'SubledgerVoucherGeneralJournalEntry',
+            fields: ['CustInvoiceJour.LedgerVoucher → SubledgerVoucherGeneralJournalEntry.Voucher'],
+            note: 'Match the posted AR voucher to the subledger/GL bridge; preserve company context when matching',
+          },
+          {
+            from: 'SubledgerVoucherGeneralJournalEntry',
+            to: 'GeneralJournalEntry',
+            fields: ['SubledgerVoucherGeneralJournalEntry.GeneralJournalEntry → GeneralJournalEntry.RecId'],
+            note: 'The subledger voucher resolves to exactly one posted GL journal header',
+          },
+          {
+            from: 'GeneralJournalAccountEntry',
+            to: 'GeneralJournalEntry',
+            fields: ['GeneralJournalAccountEntry.GeneralJournalEntry → GeneralJournalEntry.RecId'],
+            note: 'Debit/credit lines of the posted GL voucher — the AR control account debit and the revenue/tax credits',
           },
           {
             from: 'CustTrans',
@@ -351,6 +415,42 @@ export const flows: Flow[] = [
         approvals: ['Invoice review workflow (optional)'],
       },
       {
+        id: 'returns',
+        title: 'Process Return / Credit Note',
+        optional: true,
+        description: 'Optional branch: the customer returns goods or the invoice is corrected. A return order is a SalesTable row with SalesType = Return Order, and the posted correction shows up as a credit note against the original invoice.',
+        roles: ['Sales', 'Warehouse', 'AR'],
+        menuPaths: [
+          'Sales and marketing > Sales returns > All return orders',
+        ],
+        docs: [
+          {
+            title: 'Returns overview',
+            url: 'https://learn.microsoft.com/dynamics365/supply-chain/sales-marketing/returns-overview',
+          },
+        ],
+        pitfalls: [
+          'ReturnDispositionCode drives what happens to the goods (credit only, scrap, replace) — it is disposition context, not a table link',
+          'A credit note is a posted CustInvoiceJour row with IsCorrection set and ReversedRecId pointing at the original invoice — not a delete of the original',
+        ],
+        prerequisites: ['Return reason codes', 'Original posted invoice (for a credit note)'],
+        tables: ['SalesTable', 'SalesLine', 'ReturnReasonCode', 'CustInvoiceJour', 'CustInvoiceTrans', 'CustTrans', 'CustSettlement'],
+        relations: [
+          {
+            from: 'SalesTable',
+            to: 'ReturnReasonCode',
+            fields: ['SalesTable.ReturnReasonCodeId → ReturnReasonCode.ReasonCodeId'],
+            note: 'A return order carries its reason code; ReturnStatus tracks the return lifecycle on the same SalesTable row',
+          },
+          {
+            from: 'CustInvoiceJour',
+            to: 'CustInvoiceJour',
+            fields: ['CustInvoiceJour.ReversedRecId → CustInvoiceJour.RecId'],
+            note: 'The credit note points back at the invoice it reverses; IsCorrection marks the posted correction and ReturnItemNum ties it to the returned line',
+          },
+        ],
+      },
+      {
         id: 'payment',
         title: 'Receive Payment',
         description: 'Enter, post, and settle customer payment against the open invoice, clearing the AR balance.',
@@ -373,9 +473,10 @@ export const flows: Flow[] = [
           'Method of payment not configured for the bank account',
           'Auto-settlement not enabled in AR parameters — payment posts but invoice stays open',
           'Bank reconciliation timing: payment posted but not yet matched on bank statement',
+          'Open-item state lives in CustTransOpen, not on CustTrans — CustTrans has Closed, there is no Open field',
         ],
         prerequisites: ['Bank account (BankAccountTable)', 'Method of payment'],
-        tables: ['CustTrans', 'CustSettlement', 'LedgerJournalTable', 'LedgerJournalTrans', 'BankAccountTable', 'BankAccountTrans', 'CashDisc'],
+        tables: ['CustTrans', 'CustTransOpen', 'CustSettlement', 'SpecTrans', 'LedgerJournalTable', 'LedgerJournalTrans', 'BankAccountTable', 'BankAccountTrans', 'CashDisc'],
         relations: [
           {
             from: 'LedgerJournalTrans',
@@ -390,10 +491,23 @@ export const flows: Flow[] = [
             note: 'Posting the payment journal creates a CustTrans credit record that offsets the invoice debit',
           },
           {
+            from: 'CustTransOpen',
+            to: 'CustTrans',
+            fields: ['CustTransOpen.RefRecId → CustTrans.RecId'],
+            note: 'CustTransOpen carries the open-item state — due date, amount still open, cash discount date and collection letter code — for the CustTrans transaction it references',
+          },
+          {
             from: 'CustSettlement',
             to: 'CustTrans',
             fields: ['CustSettlement.TransRecId → CustTrans.RecId (invoice transaction)', 'CustSettlement.OffsetRecid → CustTrans.RecId (payment transaction)'],
             note: 'CustSettlement is the linking record between the invoice CustTrans and payment CustTrans; settling closes both records',
+          },
+          {
+            from: 'SpecTrans',
+            to: 'CustTrans',
+            fields: ['SpecTrans.SpecRecId + SpecTrans.SpecTableId → CustTrans.RecId (polymorphic — requires the table id pair and company context)'],
+            badge: 'polymorphic — requires SpecTableId + SpecRecId + company',
+            note: 'Polymorphic, not a direct FK: SpecTrans records which transactions a journal line marks for settlement, so SpecRecId/SpecTableId and RefRecId/RefTableId must be read as a pair together with SpecCompany/RefCompany',
           },
           {
             from: 'LedgerJournalTrans',
@@ -415,12 +529,63 @@ export const flows: Flow[] = [
           },
         ],
       },
+      {
+        id: 'collections',
+        title: 'Manage Overdue Receivables',
+        optional: true,
+        description: 'Optional branch: the invoice is not paid by its due date. Collection letters and interest notes chase the overdue balance; recovery is still settled in the payment stage.',
+        roles: ['AR', 'Controller'],
+        menuPaths: [
+          'Accounts receivable > Credit and collections > Collection letter',
+          'Accounts receivable > Credit and collections > Interest',
+        ],
+        docs: [
+          {
+            title: 'Collections and credit in Accounts receivable',
+            url: 'https://learn.microsoft.com/dynamics365/finance/accounts-receivable/collections-credit-accounts-receivable',
+          },
+          {
+            title: 'Customer interest and collection letters',
+            url: 'https://learn.microsoft.com/dynamics365/finance/accounts-receivable/tasks/process-collection-letters',
+          },
+        ],
+        pitfalls: [
+          'Collection letter sequence or interest code not configured — the posting run produces nothing',
+          'Overdue is derived from CustTransOpen.DueDate, not from the invoice date — payment terms decide when an item becomes delinquent',
+        ],
+        prerequisites: ['Collection letter sequences', 'Interest codes', 'Posting profiles'],
+        tables: ['CustTrans', 'CustTransOpen', 'CustCollectionLetterJour', 'CustInterestJour', 'CustInterest', 'PaymTerm'],
+        relations: [
+          {
+            from: 'CustTransOpen',
+            to: 'CustTrans',
+            fields: ['CustTransOpen.RefRecId → CustTrans.RecId'],
+            note: 'Only open items are chased; CustTransOpen supplies the due date and the amount still outstanding',
+          },
+          {
+            from: 'CustCollectionLetterJour',
+            to: 'CustTable',
+            fields: ['CustCollectionLetterJour.AccountNum → CustTable.AccountNum'],
+            note: 'One collection letter journal row per customer per letter code, carrying the letter number, date and fee',
+          },
+          {
+            from: 'CustInterestJour',
+            to: 'CustTable',
+            fields: ['CustInterestJour.AccountNum → CustTable.AccountNum'],
+            note: 'Interest note posted against the customer for the overdue amount; PaymTermId holds the terms the interest was calculated from',
+          },
+        ],
+      },
     ],
     edges: [
       { from: 'quote', to: 'so' },
-      { from: 'so', to: 'pickpack' },
+      { from: 'so', to: 'confirm' },
+      { from: 'confirm', to: 'pickpack' },
       { from: 'pickpack', to: 'invoice' },
       { from: 'invoice', to: 'payment' },
+      { from: 'invoice', to: 'returns' },
+      { from: 'invoice', to: 'collections' },
+      { from: 'collections', to: 'payment' },
     ],
   },
   {
@@ -519,7 +684,7 @@ export const flows: Flow[] = [
         ],
         pitfalls: ['Tax code mismatch', 'Posting profile missing', '3-way match failed'],
         prerequisites: ['Vendor posting profiles', 'Tax groups'],
-        tables: ['VendInvoiceJour', 'VendInvoiceTrans', 'VendTrans', 'TaxTrans', 'LedgerTrans', 'VendInvoiceInfoTable', 'VendInvoiceInfoLine'],
+        tables: ['VendInvoiceJour', 'VendInvoiceTrans', 'VendTrans', 'TaxTrans', 'SubledgerVoucherGeneralJournalEntry', 'GeneralJournalEntry', 'VendInvoiceInfoTable', 'VendInvoiceInfoLine'],
         relations: [
           {
             from: 'VendInvoiceTrans',
@@ -730,7 +895,7 @@ export const flows: Flow[] = [
         ],
         pitfalls: ['Costing version not active', 'Inventory close blocked'],
         prerequisites: ['Costing version', 'Inventory close schedule'],
-        tables: ['InventSettlement', 'InventTrans', 'ProdCalcTrans', 'LedgerTrans'],
+        tables: ['InventSettlement', 'InventTrans', 'ProdCalcTrans', 'SubledgerVoucherGeneralJournalEntry'],
         relations: [
           {
             from: 'ProdCalcTrans',
@@ -740,9 +905,9 @@ export const flows: Flow[] = [
           },
           {
             from: 'InventSettlement',
-            to: 'LedgerTrans',
-            note: 'Inventory close settles to ledger',
-            fields: ['InventSettlement.Voucher = LedgerTrans.Voucher', 'InventSettlement.TransRecId → InventTrans.RecId']
+            to: 'SubledgerVoucherGeneralJournalEntry',
+            note: 'Inventory close settles to the ledger: the settlement voucher matches the subledger/GL bridge row, which resolves to the GeneralJournalEntry header',
+            fields: ['InventSettlement.Voucher → SubledgerVoucherGeneralJournalEntry.Voucher', 'InventSettlement.TransRecId → InventTrans.RecId']
           }
         ]
       }
@@ -912,7 +1077,7 @@ export const flows: Flow[] = [
         ],
         pitfalls: ['Open production or transfers blocking', 'High variance from costing version'],
         prerequisites: ['Costing version final', 'All POs/SOs posted'],
-        tables: ['InventSettlement', 'InventTrans', 'InventCostList', 'LedgerTrans'],
+        tables: ['InventSettlement', 'InventTrans', 'InventCostList', 'SubledgerVoucherGeneralJournalEntry'],
         relations: [
           {
             from: 'InventSettlement',
@@ -922,9 +1087,9 @@ export const flows: Flow[] = [
           },
           {
             from: 'InventSettlement',
-            to: 'LedgerTrans',
-            note: 'Adjustments post to ledger',
-            fields: ['InventSettlement.Voucher = LedgerTrans.Voucher']
+            to: 'SubledgerVoucherGeneralJournalEntry',
+            note: 'Adjustments post to the ledger through the subledger/GL voucher bridge',
+            fields: ['InventSettlement.Voucher → SubledgerVoucherGeneralJournalEntry.Voucher']
           }
         ]
       }
@@ -1058,7 +1223,7 @@ export const flows: Flow[] = [
         ],
         pitfalls: ['Schedule not set', 'Allocation method wrong'],
         prerequisites: ['Revenue recognition schedule', 'Project group rules'],
-        tables: ['ProjRevenueTrans', 'ProjCostTrans', 'LedgerTrans', 'ProjTable'],
+        tables: ['ProjRevenueTrans', 'ProjCostTrans', 'SubledgerVoucherGeneralJournalEntry', 'ProjTable'],
         relations: [
           {
             from: 'ProjRevenueTrans',
@@ -1068,9 +1233,9 @@ export const flows: Flow[] = [
           },
           {
             from: 'ProjRevenueTrans',
-            to: 'LedgerTrans',
-            note: 'Recognition posts to ledger',
-            fields: ['ProjRevenueTrans.Voucher = LedgerTrans.Voucher']
+            to: 'SubledgerVoucherGeneralJournalEntry',
+            note: 'Recognition posts to the ledger; the project voucher is matched on the subledger/GL bridge row, which resolves to the GeneralJournalEntry header',
+            fields: ['ProjRevenueTrans.VoucherJournal → SubledgerVoucherGeneralJournalEntry.Voucher']
           }
         ]
       }
@@ -1156,14 +1321,14 @@ export const flows: Flow[] = [
         ],
         pitfalls: ['Approval workflow missing', 'Posting profile errors'],
         prerequisites: ['Journal names', 'Approval workflow (optional)'],
-        tables: ['LedgerJournalTable', 'LedgerJournalTrans', 'LedgerAllocationRule', 'LedgerTrans', 'GeneralJournalEntry', 'GeneralJournalAccountEntry'],
+        tables: ['LedgerJournalTable', 'LedgerJournalTrans', 'LedgerAllocationRule', 'SubledgerVoucherGeneralJournalEntry', 'GeneralJournalEntry', 'GeneralJournalAccountEntry'],
         relations: [
           { from: 'LedgerJournalTrans', to: 'LedgerJournalTable', note: 'Lines tied to journal header', fields: ['LedgerJournalTrans.JournalNum → LedgerJournalTable.JournalNum'] },
           {
             from: 'LedgerJournalTrans',
-            to: 'LedgerTrans',
-            note: 'Posting creates ledger entries',
-            fields: ['LedgerJournalTrans.Voucher = LedgerTrans.Voucher', 'LedgerJournalTrans.Account = LedgerTrans.AccountNum']
+            to: 'SubledgerVoucherGeneralJournalEntry',
+            note: 'Posting creates the subledger voucher that resolves to the GL journal header; the account lives on LedgerJournalTrans.LedgerDimension, not as an account number on the posted entry',
+            fields: ['LedgerJournalTrans.Voucher → SubledgerVoucherGeneralJournalEntry.Voucher']
           },
           {
             from: 'GeneralJournalAccountEntry',
@@ -1218,12 +1383,12 @@ export const flows: Flow[] = [
         ],
         pitfalls: ['Subledger not closed', 'Financial reporter trees incomplete'],
         prerequisites: ['Close checklist', 'Financial reporter trees'],
-        tables: ['LedgerPeriodClose', 'LedgerTrans', 'FinancialReportingTree', 'SubledgerVoucherGeneralJournalEntry'],
+        tables: ['LedgerPeriodClose', 'GeneralJournalEntry', 'FinancialReportingTree', 'SubledgerVoucherGeneralJournalEntry'],
         relations: [
           {
             from: 'LedgerPeriodClose',
-            to: 'LedgerTrans',
-            fields: ['Period/ledger linkage via LedgerPeriodClose.Ledger = LedgerTrans.Ledger'],
+            to: 'GeneralJournalEntry',
+            fields: ['Period/ledger linkage via LedgerPeriodClose.Ledger = GeneralJournalEntry.Ledger'],
             note: 'Close tasks depend on ledger postings completion',
           },
           {
@@ -3833,26 +3998,320 @@ export const tableDefs: Record<string, TableDef> = {
     ],
   },
 
-  LedgerTrans: {
-    name: "LedgerTrans",
-    description: "General ledger posted transaction. NOTE: In D365FO (AX 2012+) the legacy LedgerTrans table was replaced by GeneralJournalEntry (header) + GeneralJournalAccountEntry (lines). This entry describes GeneralJournalEntry — the posted GL transaction header containing the voucher, accounting date, posting layer, and link to subledger source documents.",
-    module: "General Ledger",
-    docsUrl: "https://learn.microsoft.com/en-us/common-data-model/schema/core/operationscommon/tables/finance/ledger/transactionheader/generaljournalentry",
+  CustTransOpen: {
+    name: "CustTransOpen",
+    description: "Open-item projection of a customer transaction. One row per CustTrans that is not fully settled, holding the due date, the amount still open and the cash-discount / collection state. Overdue AR is read from here, not from CustTrans.",
+    module: "Accounts Receivable",
+    docsUrl: "https://learn.microsoft.com/en-us/common-data-model/schema/core/operationscommon/tables/finance/accountsreceivable/transaction/custtransopen",
     fields: [
-      { name: "RecId", type: "Int64", note: "Surrogate primary key" },
-      { name: "JournalNumber", type: "String", note: "Subledger journal number (internal posting reference)" },
-      { name: "AccountingDate", type: "Date", note: "Date on which the entry is recognised in the GL" },
-      { name: "Voucher", type: "String", note: "Voucher number; connects to VendTrans.Voucher, CustTrans.Voucher, etc." },
-      { name: "PostingLayer", type: "Int32", note: "Enum: Current=0, Operations=1, Tax=2; separates reporting layers" },
-      { name: "IsSystemGenerated", type: "Int32", note: "1 if auto-generated by subledger posting engine; 0 if entered manually" },
-      { name: "SystemGeneratedEntryType", type: "Int32", note: "Indicates the subledger module that originated this entry (AP, AR, Inventory, etc.)" },
-      { name: "TransactionLog_RecId", type: "Int64", fkTarget: "TransactionLog.RecId", note: "FK to the immutable transaction log for audit trail" },
+      {
+        name: "RefRecId",
+        type: "Int64",
+        fkTarget: "CustTrans.RecId",
+        note: "The CustTrans transaction this open item belongs to.",
+      },
+      {
+        name: "AccountNum",
+        type: "String",
+        fkTarget: "CustTable.AccountNum",
+        note: "Customer account, denormalised from the referenced CustTrans.",
+      },
+      {
+        name: "DueDate",
+        type: "Date",
+        note: "Payment due date derived from the payment terms; aging and collection letters run off this date.",
+      },
+      {
+        name: "AmountCur",
+        type: "Real",
+        note: "Amount still open on the transaction in the transaction currency.",
+      },
+      {
+        name: "CashDiscDate",
+        type: "Date",
+        note: "Last date the cash discount can still be taken.",
+      },
+      {
+        name: "CollectionLetter",
+        type: "Enum",
+        note: "Collection letter state for this open item.",
+      },
+    ],
+  },
+
+  SpecTrans: {
+    name: "SpecTrans",
+    description: "Polymorphic settlement/selection record. It links a journal line or payment proposal line to the transaction it marks for settlement, using a table-id + record-id pair on each side. Never read SpecRecId on its own — it only identifies a row together with SpecTableId and the company.",
+    module: "Accounts Receivable",
+    docsUrl: "https://learn.microsoft.com/en-us/common-data-model/schema/core/operationscommon/tables/finance/accountsreceivable/miscellaneous/spectrans",
+    fields: [
+      {
+        name: "SpecRecId",
+        type: "Int64",
+        note: "Record id of the transaction being marked (invoice or payment). Polymorphic — pair with SpecTableId.",
+      },
+      {
+        name: "SpecTableId",
+        type: "Int32",
+        note: "Table id of the table SpecRecId points into (e.g. CustTrans, CustInvoiceTable). Required discriminator.",
+      },
+      {
+        name: "SpecCompany",
+        type: "String",
+        note: "Legal entity of the marked transaction; the id pair is only unique within a company.",
+      },
+      {
+        name: "RefRecId",
+        type: "Int64",
+        note: "Record id of the referencing row (journal line, settlement). Polymorphic — pair with RefTableId.",
+      },
+      {
+        name: "RefTableId",
+        type: "Int32",
+        note: "Table id of the table RefRecId points into. Required discriminator.",
+      },
+      {
+        name: "RefCompany",
+        type: "String",
+        note: "Legal entity of the referencing row.",
+      },
+      {
+        name: "Balance01",
+        type: "Real",
+        note: "Open balance carried on the marked transaction at selection time.",
+      },
+    ],
+  },
+
+  SalesAgreementHeader: {
+    name: "SalesAgreementHeader",
+    description: "Sales-specific extension of the generic AgreementHeader. A sales agreement is an AgreementHeader row with the sales classification; this table carries the customer and the agreement number that the generic header does not.",
+    module: "Sales",
+    docsUrl: "https://learn.microsoft.com/en-us/common-data-model/schema/core/operationscommon/tables/supplychain/salesmarketing/worksheetheader/salesagreementheader",
+    fields: [
+      {
+        name: "RecId",
+        type: "Int64",
+        note: "Shares the AgreementHeader RecId — the agreement identity is the generic header's key.",
+      },
+      {
+        name: "CustAccount",
+        type: "String",
+        fkTarget: "CustTable.AccountNum",
+        note: "Customer the agreement is signed with.",
+      },
+      {
+        name: "CustomerDataAreaId",
+        type: "String",
+        note: "Legal entity of the customer account; a company cross-reference, not a foreign key to a customer row.",
+      },
+      {
+        name: "SalesNumberSequence",
+        type: "String",
+        note: "Sales agreement number shown to the user.",
+      },
+      {
+        name: "SellingLegalEntity",
+        type: "Int64",
+        note: "Legal entity that sells under the agreement.",
+      },
+    ],
+  },
+
+  CustInterestJour: {
+    name: "CustInterestJour",
+    description: "Posted interest note against an overdue customer balance. Created by the interest calculation run; the interest code in CustInterest supplies the rate and the posting profile.",
+    module: "Accounts Receivable",
+    docsUrl: "https://learn.microsoft.com/en-us/common-data-model/schema/core/operationscommon/tables/finance/accountsreceivable/transaction/custinterestjour",
+    fields: [
+      {
+        name: "AccountNum",
+        type: "String",
+        fkTarget: "CustTable.AccountNum",
+        note: "Customer the interest is charged to.",
+      },
+      {
+        name: "InterestNote",
+        type: "String",
+        note: "Interest note identifier printed on the note sent to the customer.",
+      },
+      {
+        name: "Fee",
+        type: "Real",
+        note: "Interest amount charged for the period.",
+      },
+      {
+        name: "DueDate",
+        type: "Date",
+        note: "Due date of the transaction the interest was calculated on.",
+      },
+      {
+        name: "PaymTermId",
+        type: "String",
+        fkTarget: "PaymTerm.PaymTermId",
+        note: "Payment terms the due date was derived from.",
+      },
+      {
+        name: "Status",
+        type: "Enum",
+        note: "Note status — created, printed, canceled.",
+      },
+    ],
+  },
+
+  CustCollectionLetterJour: {
+    name: "CustCollectionLetterJour",
+    description: "Posted collection letter for a customer with overdue items. One row per customer per letter code in a collection letter run; the sequence of letter codes is what makes it a dunning ladder.",
+    module: "Accounts Receivable",
+    docsUrl: "https://learn.microsoft.com/en-us/common-data-model/schema/core/operationscommon/tables/finance/accountsreceivable/transaction/custcollectionletterjour",
+    fields: [
+      {
+        name: "AccountNum",
+        type: "String",
+        fkTarget: "CustTable.AccountNum",
+        note: "Customer the letter is sent to.",
+      },
+      {
+        name: "CollectionLetterCode",
+        type: "Enum",
+        note: "Which step of the collection letter sequence this letter is; the sequence is configured per customer posting profile.",
+      },
+      {
+        name: "CollectionLetterNum",
+        type: "String",
+        note: "Letter number from the number sequence, printed on the letter.",
+      },
+      {
+        name: "CollectionLetterDate",
+        type: "Date",
+        note: "Date the letter was posted/printed.",
+      },
+      {
+        name: "DueDate",
+        type: "Date",
+        note: "Due date of the overdue items the letter covers.",
+      },
+      {
+        name: "Fee",
+        type: "Real",
+        note: "Fee charged for sending the letter, if the code defines one.",
+      },
+      {
+        name: "Status",
+        type: "Enum",
+        note: "Letter status — created, printed, canceled.",
+      },
+    ],
+  },
+
+  ReturnReasonCode: {
+    name: "ReturnReasonCode",
+    description: "Reason code master for return orders. Grouped by ReturnReasonCodeGroupId so return reporting and disposition rules can be driven per reason.",
+    module: "Sales",
+    docsUrl: "https://learn.microsoft.com/en-us/common-data-model/schema/core/operationscommon/tables/supplychain/salesmarketing/main/returnreasoncode",
+    fields: [
+      {
+        name: "ReasonCodeId",
+        type: "String",
+        note: "Reason code identifier referenced by SalesTable.ReturnReasonCodeId on a return order.",
+      },
+      {
+        name: "ReasonCodeGroupId",
+        type: "String",
+        note: "Group the reason code belongs to, used to bucket return reasons in reporting.",
+      },
+      {
+        name: "Description",
+        type: "String",
+        note: "User-facing description of the return reason.",
+      },
+    ],
+  },
+
+  InventTransOrigin: {
+    name: "InventTransOrigin",
+    description: "Identity record for an inventory transaction id. Every InventTrans row for the same business transaction (receipt, issue, settlement) shares one InventTransOrigin; document lines such as WHSWorkLine and CustPackingSlipTrans point at it by InventTransId rather than at InventTrans directly.",
+    module: "Inventory",
+    docsUrl: "https://learn.microsoft.com/en-us/common-data-model/schema/core/operationscommon/tables/supplychain/inventory/inventorytransaction/inventtransorigin",
+    fields: [
+      {
+        name: "RecId",
+        type: "Int64",
+        note: "Surrogate primary key; InventTrans.InventTransOrigin references this.",
+      },
+      {
+        name: "InventTransId",
+        type: "String",
+        note: "Inventory transaction id shared by all InventTrans rows of the same business transaction. Document lines carry this id.",
+      },
+      {
+        name: "ItemId",
+        type: "String",
+        fkTarget: "InventTable.ItemId",
+        note: "Item the transaction is for.",
+      },
+      {
+        name: "ItemInventDimId",
+        type: "String",
+        fkTarget: "InventDim.inventDimId",
+        note: "Inventory dimension combination of the transaction.",
+      },
+      {
+        name: "ReferenceCategory",
+        type: "Enum",
+        note: "Which kind of source document created the transaction (sales order, purchase order, transfer, ...).",
+      },
+      {
+        name: "ReferenceId",
+        type: "String",
+        note: "Source document number — the sales id, purchase id or transfer id the transaction came from.",
+      },
+    ],
+  },
+
+  WMSPickingRoute: {
+    name: "WMSPickingRoute",
+    description: "Picking route header in warehouse management — a grouped set of picking work released to the warehouse floor for one shipment or wave.",
+    module: "Inventory",
+    docsUrl: "https://learn.microsoft.com/en-us/common-data-model/schema/core/operationscommon/tables/supplychain/inventory/miscellaneous/wmspickingroute",
+    fields: [
+      {
+        name: "pickingRouteID",
+        type: "String",
+        note: "Picking route identifier.",
+      },
+      {
+        name: "shipmentId",
+        type: "String",
+        fkTarget: "WHSShipmentTable.ShipmentId",
+        note: "Shipment the route picks for.",
+      },
+      {
+        name: "transRefId",
+        type: "String",
+        note: "Source document number the picking is fulfilling (sales id or transfer id).",
+      },
+      {
+        name: "transType",
+        type: "Enum",
+        note: "Type of the source transaction — sales order, transfer issue, and so on.",
+      },
+      {
+        name: "expeditionStatus",
+        type: "Enum",
+        note: "Route status: open, in process, closed, canceled.",
+      },
+      {
+        name: "DlvDate",
+        type: "Date",
+        note: "Requested delivery date for the route.",
+      },
     ],
   },
 
   GeneralJournalEntry: {
     name: "GeneralJournalEntry",
-    description: "Posted GL voucher header table. Every financial posting (AP invoice, AR payment, journal entry, etc.) creates exactly one row here, replacing the legacy LedgerTrans table from AX 2009.",
+    description: "Posted GL voucher header table. Every financial posting (AP invoice, AR payment, journal entry, etc.) creates exactly one row here. It replaced the legacy AX 2009 LedgerTrans table, together with GeneralJournalAccountEntry for the debit/credit lines; there is no Voucher field on this table — the voucher number lives on SubledgerVoucher and on the subledger bridge table.",
     module: "General Ledger",
     docsUrl: "https://learn.microsoft.com/en-us/common-data-model/schema/core/operationscommon/tables/finance/ledger/transactionheader/generaljournalentry",
     fields: [
@@ -5748,7 +6207,7 @@ export const tableDefs: Record<string, TableDef> = {
       { name: "TransDate", type: "date", note: "Date the hours were worked / posted" },
       { name: "TotalCostAmountCur", type: "decimal", note: "Total cost amount in transaction currency (hours × cost price)" },
       { name: "TotalSalesAmountCur", type: "decimal", note: "Total sales/revenue amount in transaction currency" },
-      { name: "VoucherJournal", type: "string", note: "GL voucher number; links to LedgerTrans for the accounting entries" },
+      { name: "VoucherJournal", type: "string", note: "GL voucher number; matches SubledgerVoucherGeneralJournalEntry.Voucher, which resolves to the GeneralJournalEntry header" },
     ],
   },
 
@@ -5782,7 +6241,7 @@ export const tableDefs: Record<string, TableDef> = {
       { name: "TransDate", type: "date", note: "Date the expense was posted" },
       { name: "TotalCostAmountCur", type: "decimal", note: "Total cost in transaction currency" },
       { name: "TotalSalesAmountCur", type: "decimal", note: "Billable amount in transaction currency" },
-      { name: "VoucherJournal", type: "string", note: "GL voucher number linking to LedgerTrans" },
+      { name: "VoucherJournal", type: "string", note: "GL voucher number; matches SubledgerVoucherGeneralJournalEntry.Voucher for the posted GL entry" },
     ],
   },
 
@@ -5858,7 +6317,7 @@ export const tableDefs: Record<string, TableDef> = {
       { name: "CategoryId", type: "string", note: "FK → ProjCategory; revenue category driving the posting accounts" },
       { name: "TransDate", type: "date", note: "Date the revenue accrual was recognised" },
       { name: "TotalSalesAmountCur", type: "decimal", note: "Revenue amount accrued in transaction currency" },
-      { name: "VoucherJournal", type: "string", note: "GL voucher; links to LedgerTrans for the WIP-Revenue accounting entry" },
+      { name: "VoucherJournal", type: "string", note: "GL voucher; matches SubledgerVoucherGeneralJournalEntry.Voucher for the WIP-revenue accounting entry" },
       { name: "IsCorrection", type: "int32", note: "Flag: 1=this row is a reversal/correction of a prior accrual" },
       { name: "LinePropertyId", type: "string", note: "FK → ProjLineProperty; controls whether line is chargeable and accrues revenue" },
     ],
