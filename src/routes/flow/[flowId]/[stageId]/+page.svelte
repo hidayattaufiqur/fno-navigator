@@ -33,6 +33,10 @@
   $: navStages = stage.optional ? filteredStages : filteredStages.filter((s) => !s.optional)
   $: currentIndex = navStages.findIndex((stageItem) => stageItem.id === stage.id)
 
+  // Array order puts branches next to unrelated stages (returns|payment,
+  // payment|collections). Only flow.edges knows which pairs are real steps.
+  $: edgeSet = new Set((flow.edges ?? []).map((e) => `${e.from}>${e.to}`))
+
   // ── Stage relation graph ────────────────────────────────────────────────────
 
   $: stageRelations = stage.relations ?? []
@@ -113,6 +117,8 @@
     <div class="mini">No stages match this role.</div>
   {:else}
     {#each filteredStages as stageItem, i}
+      {@const nextStage = filteredStages[i + 1]}
+      {@const linked = nextStage ? edgeSet.has(`${stageItem.id}>${nextStage.id}`) : false}
       <div class="pipeline-step">
         <a
           href="/flow/{flow.id}/{stageItem.id}"
@@ -129,10 +135,11 @@
         </a>
         <div
           class="pipeline-arrow"
-          class:hidden={i === filteredStages.length - 1}
-          class:branch={filteredStages[i + 1]?.optional}
+          class:hidden={!nextStage}
+          class:branch={linked && nextStage.optional}
+          class:gap={nextStage && !linked}
           aria-hidden="true"
-        >{filteredStages[i + 1]?.optional ? '↳' : '→'}</div>
+        >{!nextStage ? '' : linked ? (nextStage.optional ? '↳' : '→') : '·'}</div>
       </div>
     {/each}
   {/if}

@@ -1384,6 +1384,11 @@ a.node.active {
   color: var(--clr-text-muted);
   font-style: normal;
 }
+/* No declared edge between these two stages: array order only, not a flow */
+.pipeline-arrow.gap {
+  color: var(--clr-text-muted);
+  opacity: 0.45;
+}
 .optional-badge {
   font-size: 10px;
   font-weight: 600;
