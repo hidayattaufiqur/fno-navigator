@@ -721,6 +721,9 @@
               {#if rel.fields?.length}
                 <code class="rel-fields">{rel.fields[0]}</code>
               {/if}
+              {#if rel.badge}
+                <span class="rel-badge">{rel.badge}</span>
+              {/if}
             </div>
           {/each}
         </div>
@@ -745,6 +748,9 @@
               <a href="/tables/{rel.to}" class="rel-to self">{rel.to}</a>
               {#if rel.fields?.length}
                 <code class="rel-fields">{rel.fields[0]}</code>
+              {/if}
+              {#if rel.badge}
+                <span class="rel-badge">{rel.badge}</span>
               {/if}
             </div>
           {/each}
@@ -777,6 +783,12 @@
 {/if}
 
 <style>
+  .rel-badge {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--clr-text-muted);
+    margin-left: 6px;
+  }
   /* ── Pill TOC (UX #5) ──────────────────────────────────────────────────── */
   .toc-pills {
     display: inline-flex;
