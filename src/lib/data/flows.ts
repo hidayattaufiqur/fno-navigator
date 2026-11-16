@@ -1227,7 +1227,7 @@ export const flows: Flow[] = [
         menuPaths: [
           'Production control > Periodic tasks > Production order status update > End',
           'Inventory management > Periodic tasks > Closing and adjustment',
-          'Production control > Enquiries and reports > Cost analysis reports > Cost estimates and costings',
+          'Production control > Inquiries and reports > Cost analysis reports > Cost estimates and costings',
         ],
         docs: [
           {
