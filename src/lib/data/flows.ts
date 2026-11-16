@@ -4382,6 +4382,7 @@ export const tableDefs: Record<string, TableDef> = {
     name: "PurchTableHistory",
     description: "Versioned snapshot of a purchase order header. Written when purchase order change management is enabled: each confirmed amendment becomes a dated row (ValidFrom/ValidTo) against the same PurchId rather than overwriting the live header.",
     module: "Procurement and Sourcing",
+    docsUrl: "https://learn.microsoft.com/common-data-model/schema/core/operationscommon/tables/supplychain/procurementandsourcing/transaction/purchtablehistory",
     fields: [
       { name: "PurchId", type: "String", note: "Purchase order number the history row belongs to (EDT PurchIdBase)" },
       { name: "PurchStatus", type: "Enum", note: "Enum PurchStatus as at this version: None=0, Backorder=1, Received=2, Invoiced=3, Canceled=4" },
@@ -4394,6 +4395,7 @@ export const tableDefs: Record<string, TableDef> = {
     name: "PurchLineHistory",
     description: "Versioned snapshot of a purchase order line, written alongside PurchTableHistory under purchase order change management. Keyed by PO id plus line number.",
     module: "Procurement and Sourcing",
+    docsUrl: "https://learn.microsoft.com/common-data-model/schema/core/operationscommon/tables/supplychain/procurementandsourcing/transaction/purchlinehistory",
     fields: [
       { name: "PurchId", type: "String", note: "Purchase order number (EDT PurchIdBase)" },
       { name: "LineNumber", type: "Int64", note: "PO line number; EDT TradeLineNumber, same domain as PurchLine.LineNumber" },
@@ -4409,6 +4411,7 @@ export const tableDefs: Record<string, TableDef> = {
     name: "PurchReqTableHistory",
     description: "Versioned snapshot of a purchase requisition header, written when requisition change management is enabled so each submitted/approved revision is retained.",
     module: "Procurement and Sourcing",
+    docsUrl: "https://learn.microsoft.com/common-data-model/schema/core/operationscommon/tables/supplychain/procurementandsourcing/transactionheader/purchreqtablehistory",
     fields: [
       { name: "PurchReqId", type: "String", note: "Requisition number (EDT PurchReqId)" },
       { name: "PurchReqTable", type: "Int64", fkTarget: "PurchReqTable.RecId", note: "RecId of the live requisition header this version belongs to (EDT RefRecId)" },
@@ -4422,6 +4425,7 @@ export const tableDefs: Record<string, TableDef> = {
     name: "VendItemMatchingPolicy",
     description: "Vendor/item invoice-matching policy exception. Overrides the invoice-matching policy from Accounts payable parameters for a specific vendor and item combination.",
     module: "Accounts Payable",
+    docsUrl: "https://learn.microsoft.com/common-data-model/schema/core/operationscommon/tables/finance/accountspayable/main/venditemmatchingpolicy",
     fields: [
       { name: "VendAccount", type: "String", fkTarget: "VendTable.AccountNum", note: "Vendor the exception applies to" },
       { name: "ItemId", type: "String", fkTarget: "InventTable.ItemId", note: "Item the exception applies to" },
@@ -4433,6 +4437,7 @@ export const tableDefs: Record<string, TableDef> = {
     name: "VendInvoiceMatching",
     description: "Invoice-matching header for a pending vendor invoice. Holds the expected PO totals and document-level tolerances the invoice is compared against during matching.",
     module: "Accounts Payable",
+    docsUrl: "https://learn.microsoft.com/common-data-model/schema/core/operationscommon/tables/finance/accountspayable/transaction/vendinvoicematching",
     fields: [
       { name: "ParmId", type: "String", note: "Posting session key linking the match to its VendInvoiceInfoTable header" },
       { name: "TableRefId", type: "String", note: "Table reference id scoping the match (EDT TradeLineRefId)" },
@@ -4445,6 +4450,7 @@ export const tableDefs: Record<string, TableDef> = {
     name: "VendParameters",
     description: "Accounts payable module parameters (one row per legal entity). Carries the default invoice-matching policy, whether matching is enabled, and the document-level price tolerance.",
     module: "Accounts Payable",
+    docsUrl: "https://learn.microsoft.com/common-data-model/schema/core/operationscommon/tables/finance/accountspayable/parameter/vendparameters",
     fields: [
       { name: "MatchingPolicy", type: "Enum", note: "Default enum PurchMatchingPolicyOption for the legal entity; vendor/item exceptions in VendItemMatchingPolicy override it" },
       { name: "UseInvoiceMatching", type: "Enum", note: "Enum UnknownNoYes — whether invoice matching is enabled at all" },
@@ -7315,6 +7321,7 @@ export const tableDefs: Record<string, TableDef> = {
     name: "RouteVersion",
     description: "Production route version that assigns a route to an item for a validity and quantity range, with approval and activation status.",
     module: "Production",
+    docsUrl: "https://learn.microsoft.com/common-data-model/schema/core/operationscommon/tables/supplychain/productioncontrol/main/routeversion",
     fields: [
       { name: "RecId", type: "Int64", note: "" },
       { name: "Active", type: "Enum", note: "EDT RouteVersionActive; enum NoYes." },
@@ -7334,6 +7341,7 @@ export const tableDefs: Record<string, TableDef> = {
     name: "ProdJournalRoute",
     description: "Route-card production journal line recording reported operation time, quantities, completion, worker, and work center for a production order.",
     module: "Production",
+    docsUrl: "https://learn.microsoft.com/common-data-model/schema/core/operationscommon/tables/supplychain/productioncontrol/worksheetline/prodjournalroute",
     fields: [
       { name: "RecId", type: "Int64", note: "" },
       { name: "Cancelled", type: "Enum", note: "EDT Cancelled; enum NoYes." },
@@ -7379,6 +7387,7 @@ export const tableDefs: Record<string, TableDef> = {
     name: "InventClosing",
     description: "Inventory close run record containing its execution date, voucher, status, parameters, and cancellation or recalculation state.",
     module: "Inventory",
+    docsUrl: "https://learn.microsoft.com/common-data-model/schema/core/operationscommon/tables/supplychain/inventory/transactionheader/inventclosing",
     fields: [
       { name: "RecId", type: "Int64", note: "" },
       { name: "Active", type: "Enum", note: "Enum NoYes." },
@@ -7419,6 +7428,7 @@ export const tableDefs: Record<string, TableDef> = {
     name: "ForecastModel",
     description: "Forecast model header that identifies a demand forecast model and its related project budget behavior and submodel.",
     module: "Master Planning",
+    docsUrl: "https://learn.microsoft.com/common-data-model/schema/core/operationscommon/tables/supplychain/masterplanning/group/forecastmodel",
     fields: [
       { name: "RecId", type: "Int64", note: "" },
       { name: "Blocked", type: "Enum", note: "Enum NoYes." },
@@ -7444,6 +7454,7 @@ export const tableDefs: Record<string, TableDef> = {
     name: "ReqPlan",
     description: "Master plan header defining the plan identity, type, forecast model, and whether forecast demand or supply is included.",
     module: "Master Planning",
+    docsUrl: "https://learn.microsoft.com/common-data-model/schema/core/operationscommon/tables/supplychain/masterplanning/group/reqplan",
     fields: [
       { name: "RecId", type: "Int64", note: "" },
       { name: "ForecastModelId", type: "String", note: "EDT ForecastModelHeadId." },
@@ -7460,6 +7471,7 @@ export const tableDefs: Record<string, TableDef> = {
     name: "ReqTransFirmLog",
     description: "Master planning firming log entry recording the source reference, firmed document reference, item, quantity, date, and user.",
     module: "Master Planning",
+    docsUrl: "https://learn.microsoft.com/common-data-model/schema/core/operationscommon/tables/supplychain/masterplanning/transaction/reqtransfirmlog",
     fields: [
       { name: "RecId", type: "Int64", note: "" },
       { name: "InventTransId", type: "String", note: "EDT InventTransId." },
