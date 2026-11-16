@@ -5707,7 +5707,7 @@ export const tableDefs: Record<string, TableDef> = {
 
   InventSettlement: {
     name: "InventSettlement",
-    description: "Inventory cost settlement record created by the inventory close process. Each row links a financially posted receipt transaction (TransRecId) to a financially posted issue transaction (SettleTransId), recording the quantity settled and the cost adjustment amount. Cancelled settlements carry a Cancelled flag and settle against the same InventTransId via SettleTransId; the table's only self-reference is SettleTransId → SettleTransId, declared with RelationshipType Link.",
+    description: "Inventory cost settlement record created by the inventory close process. Each row links a financially posted receipt transaction (TransRecId) to a financially posted issue transaction (SettleTransId), recording the quantity settled and the cost adjustment amount. Cancelled settlements carry a NoYes Cancelled flag; the table's only self-reference is SettleTransId → SettleTransId, declared with RelationshipType Link. The settlement's own inventory transaction links to InventTransOrigin via InventTransId (a different column from SettleTransId, whose EDT is InventSettleTransId).",
     module: "Cost Management / Inventory Management – transaction line (per legal entity)",
     docsUrl: "https://learn.microsoft.com/en-us/common-data-model/schema/core/operationscommon/tables/supplychain/inventory/transactionline/inventsettlement",
     fields: [
