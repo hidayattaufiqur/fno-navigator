@@ -690,11 +690,11 @@ export const flows: Flow[] = [
             note: 'With change management enabled each PO version is a dated history row (ValidFrom/ValidTo) against the same PurchId, not an overwrite of the live header',
           },
           {
-            from: 'PurchLine',
-            to: 'PurchLineHistory',
-            fields: ['PurchLineHistory.PurchId = PurchLine.PurchId', 'PurchLineHistory.LineNumber = PurchLine.LineNumber'],
+            from: 'PurchLineHistory',
+            to: 'PurchTableHistory',
+            fields: ['PurchLineHistory.PurchId = PurchTableHistory.PurchId'],
             badge: 'declared FK',
-            note: 'Line-level version history: the confirmed line snapshot, keyed by PO id and line number',
+            note: 'Line-level version history attaches to the header version by PurchId (AOT relation exists); the line number itself has no declared relation — pairing it with PurchLine.LineNumber is a business-key match',
           },
         ],
       },
@@ -743,7 +743,7 @@ export const flows: Flow[] = [
           'Active matching setup precedence is not documented here: confirm the effective policy in the target environment before diagnosing a failed match',
         ],
         prerequisites: ['Vendor posting profiles', 'Tax groups', 'Invoice matching policy and tolerances'],
-        tables: ['VendInvoiceJour', 'VendInvoiceTrans', 'VendTrans', 'TaxTrans', 'SubledgerVoucherGeneralJournalEntry', 'GeneralJournalEntry', 'GeneralJournalAccountEntry', 'VendInvoiceInfoTable', 'VendInvoiceInfoLine', 'PurchTable', 'PurchLine', 'VendTable', 'VendItemMatchingPolicy', 'VendInvoiceMatching', 'VendInvoiceMatchingLine', 'VendParameters'],
+        tables: ['VendInvoiceJour', 'VendInvoiceTrans', 'VendTrans', 'TaxTrans', 'SubledgerVoucherGeneralJournalEntry', 'GeneralJournalEntry', 'GeneralJournalAccountEntry', 'VendInvoiceInfoTable', 'VendInvoiceInfoLine', 'PurchTable', 'PurchLine', 'VendTable', 'VendItemMatchingPolicy', 'VendInvoiceMatching', 'VendParameters'],
         relations: [
           {
             from: 'VendInvoiceTrans',
@@ -4250,19 +4250,6 @@ export const tableDefs: Record<string, TableDef> = {
       { name: "TableRefId", type: "String", note: "Table reference id scoping the match (EDT TradeLineRefId)" },
       { name: "TotalPriceTolerancePercentage", type: "Real", note: "Allowed percentage variance on the matched total before the variance is flagged" },
       { name: "ExpectedBalance", type: "Real", note: "Expected invoice balance derived from the matched PO/receipt lines" },
-    ],
-  },
-
-  VendInvoiceMatchingLine: {
-    name: "VendInvoiceMatchingLine",
-    description: "Line-level invoice-matching result. Compares each invoice line's quantity and price against the PO/receipt line and records the resulting price variance.",
-    module: "Accounts Payable",
-    fields: [
-      { name: "MatchingPolicy", type: "Enum", note: "Enum PurchMatchingPolicyOption applied to this line" },
-      { name: "ExpectedQty", type: "Real", note: "Quantity expected from the matched PO/receipt line" },
-      { name: "ExpectedPrice", type: "Real", note: "Unit price expected from the matched PO line" },
-      { name: "PriceTolerancePercentage", type: "Real", note: "Allowed percentage price variance for this line" },
-      { name: "ExtendedPriceVarianceAmount", type: "Real", note: "Actual extended-price variance between invoice and expected line" },
     ],
   },
 
