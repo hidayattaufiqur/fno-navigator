@@ -4504,7 +4504,7 @@ export const tableDefs: Record<string, TableDef> = {
     name: "SpecTrans",
     description: "Polymorphic settlement/selection record. It links a journal line or payment proposal line to the transaction it marks for settlement, using a table-id + record-id pair on each side. Never read SpecRecId on its own — it only identifies a row together with SpecTableId and the company.",
     module: "Accounts Receivable",
-    docsUrl: "https://learn.microsoft.com/en-us/common-data-model/schema/core/operationscommon/tables/finance/accountsreceivable/miscellaneous/spectrans",
+    docsUrl: "https://learn.microsoft.com/en-us/common-data-model/schema/core/operationscommon/tables/finance/bank/worksheetline/spectrans",
     fields: [
       {
         name: "SpecRecId",
@@ -4548,7 +4548,9 @@ export const tableDefs: Record<string, TableDef> = {
     name: "SalesAgreementHeader",
     description: "Sales-specific extension of the generic AgreementHeader. A sales agreement is an AgreementHeader row with the sales classification; this table carries the customer and the agreement number that the generic header does not.",
     module: "Sales",
-    docsUrl: "https://learn.microsoft.com/en-us/common-data-model/schema/core/operationscommon/tables/supplychain/salesmarketing/worksheetheader/salesagreementheader",
+    // No docsUrl: the CDM TOC lists a SalesAgreementHeader table page but it 404s (checked
+    // 2026-11-16). Only SalesAgreementHeaderDefault / ...History exist, which are different
+    // tables. Left unlinked rather than pointing at the wrong page.
     fields: [
       {
         name: "RecId",
@@ -4669,7 +4671,9 @@ export const tableDefs: Record<string, TableDef> = {
     name: "ReturnReasonCode",
     description: "Reason code master for return orders. Grouped by ReturnReasonCodeGroupId so return reporting and disposition rules can be driven per reason.",
     module: "Sales",
-    docsUrl: "https://learn.microsoft.com/en-us/common-data-model/schema/core/operationscommon/tables/supplychain/salesmarketing/main/returnreasoncode",
+    // No docsUrl: Microsoft Learn's Common Data Model TOC lists a ReturnReasonCode table page,
+    // but the URL 404s (checked 2026-11-16). Only the adjacent ReturnReasonCodeGroup table is
+    // published, and that is a different table - linking it would misdescribe this one.
     fields: [
       {
         name: "ReasonCodeId",
@@ -4693,7 +4697,7 @@ export const tableDefs: Record<string, TableDef> = {
     name: "InventTransOrigin",
     description: "Identity record for an inventory transaction id. Every InventTrans row for the same business transaction (receipt, issue, settlement) shares one InventTransOrigin; document lines such as WHSWorkLine and CustPackingSlipTrans point at it by InventTransId rather than at InventTrans directly.",
     module: "Inventory",
-    docsUrl: "https://learn.microsoft.com/en-us/common-data-model/schema/core/operationscommon/tables/supplychain/inventory/inventorytransaction/inventtransorigin",
+    docsUrl: "https://learn.microsoft.com/en-us/common-data-model/schema/core/operationscommon/tables/supplychain/inventory/transaction/inventtransorigin",
     fields: [
       {
         name: "RecId",
@@ -4734,7 +4738,7 @@ export const tableDefs: Record<string, TableDef> = {
     name: "WMSPickingRoute",
     description: "Picking route header in warehouse management — a grouped set of picking work released to the warehouse floor for one shipment or wave.",
     module: "Inventory",
-    docsUrl: "https://learn.microsoft.com/en-us/common-data-model/schema/core/operationscommon/tables/supplychain/inventory/miscellaneous/wmspickingroute",
+    docsUrl: "https://learn.microsoft.com/en-us/common-data-model/schema/core/operationscommon/tables/supplychain/inventory/worksheetheader/wmspickingroute",
     fields: [
       {
         name: "pickingRouteID",
