@@ -1296,7 +1296,7 @@ export const flows: Flow[] = [
         title: 'Item Setup',
         description: 'Dimensions, tracking, and storage policies.',
         roles: ['Warehouse', 'Controller'],
-        menuPaths: ['Product information management > Released products'],
+        menuPaths: ['Product information management > Products > Released products'],
         docs: [
           {
             title: 'Product information overview',
@@ -1305,37 +1305,56 @@ export const flows: Flow[] = [
         ],
         pitfalls: ['Dimension group wrong for scenario', 'Tracking not aligned with WMS'],
         prerequisites: ['Storage/tracking dimension groups', 'Item model group'],
-        tables: ['InventTable', 'InventTableModule', 'InventModelGroup', 'InventDim', 'EcoResProduct', 'EcoResCategory', 'EcoResCategoryHierarchy', 'InventItemGroup'],
+        tables: ['InventTable', 'InventTableModule', 'InventModelGroup', 'InventModelGroupItem', 'InventDim', 'EcoResProduct', 'EcoResCategory', 'EcoResCategoryHierarchy', 'InventItemGroup', 'InventItemGroupItem'],
         relations: [
           {
             from: 'InventTable',
             to: 'EcoResProduct',
             fields: ['InventTable.Product → EcoResProduct.RecId'],
-            note: 'Released product (per legal entity) links back to the shared global product definition',
+            badge: 'declared FK',
+            note: 'Released product (per legal entity) links back to the shared global product definition. AOT relation EcoResProduct',
           },
           {
             from: 'InventTableModule',
             to: 'InventTable',
             fields: ['InventTableModule.ItemId → InventTable.ItemId'],
-            note: 'Up to three rows per item (ModuleType 1/2/3) carry module-specific unit, price, and discount',
+            badge: 'declared FK',
+            note: 'Up to three rows per item (ModuleType 1/2/3) carry module-specific unit, price, and discount. AOT relation InventTable',
           },
           {
             from: 'InventModelGroupItem',
             to: 'InventModelGroup',
             fields: ['InventModelGroupItem.ModelGroupId = InventModelGroup.ModelGroupId'],
-            note: 'Item model group assigned per item (InventModelGroupItem); determines costing method (FIFO/StdCost/etc.) and physical/financial posting policy',
+            badge: 'declared FK',
+            note: 'Item model group assigned per item (InventModelGroupItem); determines costing method (FIFO/StdCost/etc.) and physical/financial posting policy. AOT relation InventModelGroup also constrains ModelGroupDataAreaId as the legal-entity qualifier',
+          },
+          {
+            from: 'InventModelGroupItem',
+            to: 'InventTable',
+            fields: ['InventModelGroupItem.ItemId = InventTable.ItemId'],
+            badge: 'declared FK',
+            note: 'The item-to-model-group assignment itself. AOT relation InventTable also constrains ItemDataAreaId as the company qualifier',
           },
           {
             from: 'EcoResCategory',
             to: 'EcoResCategoryHierarchy',
             fields: ['EcoResCategory.CategoryHierarchy = EcoResCategoryHierarchy.RecId'],
-            note: 'Product category node in a hierarchy; products assigned via EcoResProductCategory',
+            badge: 'declared FK',
+            note: 'Product category node in a hierarchy; products assigned via EcoResProductCategory. AOT relation EcoResCategoryHierarchy',
           },
           {
             from: 'InventItemGroupItem',
             to: 'InventItemGroup',
             fields: ['InventItemGroupItem.ItemGroupId = InventItemGroup.ItemGroupId'],
-            note: 'Item group assigned per item (InventItemGroupItem); drives inventory posting profile and tax item groups',
+            badge: 'declared FK',
+            note: 'Item group assigned per item (InventItemGroupItem); drives inventory posting profile and tax item groups. AOT relation InventItemGroup also constrains ItemGroupDataAreaId as the legal-entity qualifier',
+          },
+          {
+            from: 'InventItemGroupItem',
+            to: 'InventTable',
+            fields: ['InventItemGroupItem.ItemId = InventTable.ItemId'],
+            badge: 'declared FK',
+            note: 'The item-to-item-group assignment itself. AOT relation InventTable also constrains ItemDataAreaId as the company qualifier',
           },
         ],
       },
@@ -1344,7 +1363,7 @@ export const flows: Flow[] = [
         title: 'On-hand and Reservations',
         description: 'Monitor availability and reservations.',
         roles: ['Warehouse', 'Sales', 'Planner'],
-        menuPaths: ['Inventory management > Inquiries and reports > On-hand inventory'],
+        menuPaths: ['Inventory management > Inquiries and reports > On-hand list'],
         docs: [
           {
             title: 'Inventory on-hand list',
@@ -1358,13 +1377,15 @@ export const flows: Flow[] = [
           {
             from: 'InventSum',
             to: 'InventDim',
-            note: 'On-hand summary per dimension',
+            badge: 'declared FK',
+            note: 'On-hand summary per dimension. AOT relation InventDim, declared on InventDimId → inventDimId',
             fields: ['InventSum.InventDimId = InventDim.InventDimId']
           },
           {
             from: 'WHSInventReserve',
             to: 'InventDim',
-            note: 'Warehouse reservation per LP/location',
+            badge: 'declared FK',
+            note: 'Warehouse reservation per LP/location. AOT relation InventDim is explicitly declared on InventDimId → inventDimId even though WHSInventReserve has no fk-map.json edge — the generated map omits the table, the source relation does not',
             fields: ['WHSInventReserve.InventDimId = InventDim.InventDimId']
           }
         ]
@@ -1374,7 +1395,7 @@ export const flows: Flow[] = [
         title: 'Transfer / Movement',
         description: 'Transfers across sites/warehouses/locations.',
         roles: ['Warehouse'],
-        menuPaths: ['Inventory management > Periodic > Transfer orders'],
+        menuPaths: ['Inventory management > Inbound orders > Transfer order'],
         docs: [
           {
             title: 'Transfer orders',
@@ -1383,19 +1404,41 @@ export const flows: Flow[] = [
         ],
         pitfalls: ['In-transit warehouse missing', 'Dimensions not aligned on transfer'],
         prerequisites: ['Transfer orders setup', 'In-transit settings'],
-        tables: ['InventTransferTable', 'InventTransferLine', 'InventTrans', 'WHSWorkTable', 'WHSLoadTable'],
+        tables: ['InventTransferTable', 'InventTransferLine', 'InventTrans', 'InventTransOrigin', 'WHSWorkTable', 'WHSLoadTable'],
         relations: [
           {
             from: 'InventTransferLine',
-            to: 'InventTrans',
-            note: 'Transfer issue/receipt creates inventory transactions',
-            fields: ['InventTrans.InventTransId from transfer posting', 'InventTrans.ReferenceId = InventTransferLine.TransferId']
+            to: 'InventTransferTable',
+            fields: ['InventTransferLine.TransferId = InventTransferTable.TransferId'],
+            badge: 'declared FK',
+            note: 'Transfer line belongs to the transfer order header. AOT relation InventTransferTable',
           },
           {
             from: 'InventTransferLine',
-            to: 'WHSWorkTable',
-            note: 'If WMS, transfer lines generate work',
-            fields: ['WHSWorkTable.LoadId / WorkId linked via transfer wave']
+            to: 'InventTransOrigin',
+            fields: [
+              'InventTransferLine.InventTransId = InventTransOrigin.InventTransId',
+              'InventTransferLine.InventTransIdReceive = InventTransOrigin.InventTransId',
+              'InventTransferLine.InventTransIdScrap = InventTransOrigin.InventTransId',
+              'InventTransferLine.InventTransIdTransitFrom = InventTransOrigin.InventTransId',
+              'InventTransferLine.InventTransIdTransitTo = InventTransOrigin.InventTransId'
+            ],
+            badge: 'declared FK',
+            note: 'Transfer posting creates one transaction origin per transfer role, all declared directly on InventTransferLine: AOT relations ShipmentInventTransOrigin (InventTransId), ReceiveInventTransOrigin (InventTransIdReceive), ScrapInventTransOrigin (InventTransIdScrap), TransitFromInventTransOrigin (InventTransIdTransitFrom), TransitToInventTransOrigin (InventTransIdTransitTo)',
+          },
+          {
+            from: 'InventTrans',
+            to: 'InventTransOrigin',
+            fields: ['InventTrans.InventTransOrigin = InventTransOrigin.RecId'],
+            badge: 'declared FK',
+            note: 'Inventory transactions reach the transfer only through their origin record. AOT relation InventTransOrigin — there is no direct InventTrans ↔ InventTransferLine edge and no TransferId/ReferenceId join',
+          },
+          {
+            from: 'WHSWorkTable',
+            to: 'InventTransferTable',
+            fields: ['WHSWorkTable.OrderNum = InventTransferTable.TransferId'],
+            badge: 'conditional FK — requires WorkTransType = WHSWorkTransType::TransferIssue or WHSWorkTransType::TransferReceipt',
+            note: 'If WMS, a transfer order generates warehouse work. Two AOT relations on the same field pair, gated by Fixed discriminator: TransferOrderIssue (WorkTransType = WHSWorkTransType::TransferIssue) and TransferOrderReciept (WorkTransType = WHSWorkTransType::TransferReceipt). Relation name spelled "Reciept" in AOT. No relation exists between InventTransferLine and WHSWorkTable',
           }
         ]
       },
@@ -1419,13 +1462,20 @@ export const flows: Flow[] = [
             from: 'WHSWorkLineCycleCount',
             to: 'WHSWorkTable',
             fields: ['WHSWorkLineCycleCount.WorkId = WHSWorkTable.WorkId'],
-            note: 'Cycle count plans generate count work; counted quantities are posted via counting journals (InventJournalTable/InventJournalTrans)',
+            badge: 'declared FK',
+            note: 'Cycle count plans generate count work; counted quantities are posted via counting journals (InventJournalTable/InventJournalTrans). AOT relation WHSWorkTable',
           },
           {
             from: 'InventJournalTrans',
             to: 'InventTransOrigin',
-            fields: ['InventJournalTrans.InventTransId = InventTransOrigin.InventTransId'],
-            note: 'Posting creates inventory transactions via the inventory transaction origin',
+            fields: [
+              'InventJournalTrans.InventTransId = InventTransOrigin.InventTransId',
+              'InventJournalTrans.InventTransIdFather = InventTransOrigin.InventTransId',
+              'InventJournalTrans.InventTransIdReturn = InventTransOrigin.InventTransId',
+              'InventJournalTrans.ToInventTransId = InventTransOrigin.InventTransId'
+            ],
+            badge: 'declared FK',
+            note: 'Posting creates inventory transactions via the inventory transaction origin. Four declared roles, the primary being AOT relation InventTransOrigin (InventTransId); the alternates are ParentInventTransOrigin (InventTransIdFather), ReturnInventTransOrigin (InventTransIdReturn) and ToInventTransOrigin (ToInventTransId)',
           },
         ],
       },
@@ -1434,28 +1484,37 @@ export const flows: Flow[] = [
         title: 'Inventory Close',
         description: 'Close period and settle receipts/issues.',
         roles: ['Controller'],
-        menuPaths: ['Inventory management > Periodic tasks > Close and adjust'],
+        menuPaths: ['Inventory management > Periodic tasks > Closing and adjustment'],
         docs: [
           {
             title: 'Inventory close',
             url: 'https://learn.microsoft.com/dynamics365/supply-chain/cost-management/inventory-close'
           }
         ],
-        pitfalls: ['Open production or transfers blocking', 'High variance from costing version'],
-        prerequisites: ['Costing version final', 'All POs/SOs posted'],
-        tables: ['InventSettlement', 'InventTrans', 'InventCostList', 'SubledgerVoucherGeneralJournalEntry'],
+        pitfalls: ['Open production or transfers blocking'],
+        prerequisites: ['All POs/SOs posted'],
+        tables: ['InventSettlement', 'InventClosing', 'InventTrans', 'InventCostList', 'SubledgerVoucherGeneralJournalEntry'],
         relations: [
           {
             from: 'InventSettlement',
             to: 'InventTrans',
-            note: 'Close settles receipts/issues',
-            fields: ['InventSettlement.TransRecId = InventTrans.RecId']
+            fields: ['InventSettlement.TransRecId = InventTrans.RecId'],
+            badge: 'declared FK',
+            note: 'Close settles receipts/issues. AOT relation InventTrans',
+          },
+          {
+            from: 'InventSettlement',
+            to: 'InventClosing',
+            fields: ['InventSettlement.Voucher = InventClosing.Voucher', 'InventSettlement.TransDate = InventClosing.TransDate'],
+            badge: 'declared FK',
+            note: 'The close run is the header and the settlements belong to it; the relation constrains both voucher and transaction date. Declared as a plain AxTableRelation (RelationshipType Association), not AxTableRelationForeignKey. Date EDTs differ: InventSettlement.TransDate is DatePosted, InventClosing.TransDate is TransDate',
           },
           {
             from: 'InventSettlement',
             to: 'SubledgerVoucherGeneralJournalEntry',
-            note: 'Adjustments post to the ledger through the subledger/GL voucher bridge',
-            fields: ['InventSettlement.Voucher → SubledgerVoucherGeneralJournalEntry.Voucher']
+            fields: ['InventSettlement.Voucher = SubledgerVoucherGeneralJournalEntry.Voucher'],
+            badge: 'field match — not a declared FK',
+            note: 'Adjustments post to the ledger through the subledger/GL voucher bridge. No AOT relation in either direction and no fk-map edge: Voucher alone is unqualified and can cross companies and dates. The bridge also keys on VoucherDataAreaId + AccountingDate, which this row does not carry — use the InventClosing row for the close run, and InventSettlement.TransDate (EDT DatePosted) does not match AccountingDate (EDT TransDate), so treat any voucher-only match as unqualified',
           }
         ]
       }
@@ -5437,6 +5496,20 @@ export const tableDefs: Record<string, TableDef> = {
     ],
   },
 
+  InventItemGroupItem: {
+    name: "InventItemGroupItem",
+    description: "Item-to-item-group assignment, one row per item per legal entity. This is the table that actually carries ItemGroupId in current D365FO — InventTable.ItemGroupId is the legacy column. AOT declares FKs to both InventItemGroup and InventTable, qualified by company.",
+    module: "Inventory Management – group assignment (per legal entity)",
+    docsUrl: "https://learn.microsoft.com/en-us/common-data-model/schema/core/operationscommon/tables/supplychain/inventory/main/inventitemgroupitem",
+    fields: [
+      { name: "RecId", type: "Int64", note: "Surrogate PK" },
+      { name: "ItemId", type: "String", note: "EDT ItemId; the released product in this legal entity" },
+      { name: "ItemDataAreaId", type: "String", note: "EDT DataAreaId; legal entity of the item (qualifier on the InventTable relation)" },
+      { name: "ItemGroupId", type: "String", note: "EDT ItemGroupId; FK → InventItemGroup.ItemGroupId" },
+      { name: "ItemGroupDataAreaId", type: "String", note: "EDT DataAreaId; legal entity of the item group (qualifier on the InventItemGroup relation)" },
+    ],
+  },
+
   InventTableModule: {
     name: "InventTableModule",
     description: "Stores module-specific settings for a released product (InventTable) per module type: Purchase (1), Sales (2), and Inventory (3). Each released product has up to three rows—one per module. Controls default unit, pricing, and discount rules.",
@@ -5468,6 +5541,20 @@ export const tableDefs: Record<string, TableDef> = {
       { name: "PostOnhandFinancial", type: "Enum", note: "Post financial (invoice) updates to the ledger." },
       { name: "NegativePhysical", type: "Enum", note: "Allow negative physical inventory for items in this group." },
       { name: "StandardCost", type: "Enum", note: "Use standard cost as the costing method for items in this group." },
+    ],
+  },
+
+  InventModelGroupItem: {
+    name: "InventModelGroupItem",
+    description: "Item-to-item-model-group assignment, one row per item per legal entity — the table that carries the costing method an item actually resolves to. AOT declares FKs to both InventModelGroup and InventTable, qualified by company.",
+    module: "Inventory Management – group assignment (per legal entity)",
+    docsUrl: "https://learn.microsoft.com/en-us/common-data-model/schema/core/operationscommon/tables/supplychain/inventory/main/inventmodelgroupitem",
+    fields: [
+      { name: "RecId", type: "Int64", note: "Surrogate PK" },
+      { name: "ItemId", type: "String", note: "EDT ItemId; the released product in this legal entity" },
+      { name: "ItemDataAreaId", type: "String", note: "EDT DataAreaId; legal entity of the item (qualifier on the InventTable relation)" },
+      { name: "ModelGroupId", type: "String", note: "EDT InventModelGroupId; FK → InventModelGroup.ModelGroupId" },
+      { name: "ModelGroupDataAreaId", type: "String", note: "EDT DataAreaId; legal entity of the model group (qualifier on the InventModelGroup relation)" },
     ],
   },
 
@@ -5620,7 +5707,7 @@ export const tableDefs: Record<string, TableDef> = {
 
   InventSettlement: {
     name: "InventSettlement",
-    description: "Inventory cost settlement record created by the inventory close process. Each row links a financially posted receipt transaction (TransRecId) to a financially posted issue transaction (SettleRecId), recording the quantity settled and the cost adjustment amount. Cancelled settlements reference the original via the Cancelled FK.",
+    description: "Inventory cost settlement record created by the inventory close process. Each row links a financially posted receipt transaction (TransRecId) to a financially posted issue transaction (SettleTransId), recording the quantity settled and the cost adjustment amount. Cancelled settlements carry a NoYes Cancelled flag; the table's only self-reference is SettleTransId → SettleTransId, declared with RelationshipType Link. The settlement's own inventory transaction links to InventTransOrigin via InventTransId (a different column from SettleTransId, whose EDT is InventSettleTransId).",
     module: "Cost Management / Inventory Management – transaction line (per legal entity)",
     docsUrl: "https://learn.microsoft.com/en-us/common-data-model/schema/core/operationscommon/tables/supplychain/inventory/transactionline/inventsettlement",
     fields: [
