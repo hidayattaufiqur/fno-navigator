@@ -927,7 +927,7 @@ export const flows: Flow[] = [
         description: 'Create demand forecasts and run master planning.',
         roles: ['Planner'],
         menuPaths: [
-          'Master planning > Forecasting > Demand forecasting > Demand forecast lines',
+          'Master planning > Forecasting > Manual forecast entry > Demand forecast lines',
           'Master planning > Master planning > Run > Master planning',
         ],
         docs: [
@@ -958,72 +958,15 @@ export const flows: Flow[] = [
             from: 'ForecastSales',
             to: 'ForecastModel',
             fields: ['ForecastSales.ModelId = ForecastModel.ModelId'],
-            badge: 'declared FK — related fixed: ForecastModel.Type = HeadingSub::Heading',
-            note: 'Every demand forecast line belongs to a forecast model; the master plan consumes models, not loose lines. The relation fixes Type = Heading, so join with that predicate or sub-models come back too',
+            badge: 'conditional FK — requires ForecastModel.Type = HeadingSub::Heading',
+            note: 'Every demand forecast line belongs to a forecast model; the master plan consumes models, not loose lines. The relation fixes Type = Heading, so join with that predicate or sub-models come back too. ForecastSales.ModelId and ForecastModel.ModelId differ in EDT: ForecastModelHeadId on this side, ForecastModelId on the model',
           },
           {
             from: 'ReqPlan',
             to: 'ForecastModel',
             fields: ['ReqPlan.ForecastModelId = ForecastModel.ModelId'],
-            badge: 'declared FK — related fixed: ForecastModel.Type = HeadingSub::Heading',
+            badge: 'conditional FK — requires ForecastModel.Type = HeadingSub::Heading',
             note: 'The plan header names the forecast model it reduces against. ReqPlan.ForecastModelId has EDT ForecastModelHeadId — not a self-reference. ReqPlanSched and ReqPlanVersion are children of ReqPlan, not the header. The relation fixes ForecastModel.Type = Heading, so filter it or sub-models come back',
-          },
-        ],
-      },
-      {
-        id: 'firm',
-        title: 'Firm and Estimate',
-        description: 'Firm planned orders into real production, purchase, transfer, or journal documents, then estimate and schedule the production order.',
-        roles: ['Planner', 'Production'],
-        menuPaths: [
-          'Master planning > Master planning > Run > Firm',
-          'Production control > Periodic tasks > Production order status update > Estimation',
-          'Production control > Production orders > All production orders',
-        ],
-        docs: [
-          {
-            title: 'Planned orders and firming',
-            url: 'https://learn.microsoft.com/dynamics365/supply-chain/master-planning/planned-orders'
-          }
-        ],
-        pitfalls: ['Planned order journal not set up for the order type', 'Estimation fails on missing cost categories'],
-        prerequisites: ['Approved BOM/route and coverage setup', 'Number sequences for the firmed order type'],
-        tables: ['ReqPlan', 'ReqTransFirmLog', 'ProdTable', 'PurchTable', 'InventTransferTable', 'InventJournalTable'],
-        relations: [
-          {
-            from: 'ReqTransFirmLog',
-            to: 'ProdTable',
-            fields: ['ReqTransFirmLog.InventTransId = ProdTable.InventTransId', 'ReqTransFirmLog.InventTransRefId = ProdTable.ProdId'],
-            badge: 'polymorphic — requires InventTransType',
-            note: 'Firmed production order; only rows with InventTransType = Production resolve here',
-          },
-          {
-            from: 'ReqTransFirmLog',
-            to: 'PurchTable',
-            fields: ['ReqTransFirmLog.InventTransRefId = PurchTable.PurchId'],
-            badge: 'polymorphic — requires InventTransType',
-            note: 'Firmed purchase order; only rows with InventTransType = Purch resolve here',
-          },
-          {
-            from: 'ReqTransFirmLog',
-            to: 'InventTransferTable',
-            fields: ['ReqTransFirmLog.InventTransRefId = InventTransferTable.TransferId'],
-            badge: 'polymorphic — requires InventTransType',
-            note: 'Firmed transfer order; only rows with InventTransType = Transfer resolve here',
-          },
-          {
-            from: 'ReqTransFirmLog',
-            to: 'InventJournalTable',
-            fields: ['ReqTransFirmLog.InventTransRefId = InventJournalTable.JournalId'],
-            badge: 'polymorphic — requires InventTransType',
-            note: 'Firmed inventory journal; only rows with InventTransType = Journal resolve here',
-          },
-          {
-            from: 'ReqTransFirmLog',
-            to: 'ReqPlan',
-            fields: ['ReqTransFirmLog.ReqPlanId = ReqPlan.ReqPlanId'],
-            badge: 'declared FK',
-            note: 'The firming log records which master plan the requirement was fired from; this is the evidence that firming happened',
           },
         ],
       },
@@ -1077,6 +1020,64 @@ export const flows: Flow[] = [
         ],
       },
       {
+        id: 'firm',
+        title: 'Firm Planned Orders',
+        description: 'Firm planned orders into real production, purchase, transfer, or journal documents (Master planning), then estimate and schedule that new production order before release (Production control). Two modules, two separate actions — not one screen.',
+        roles: ['Planner', 'Production'],
+        menuPaths: [
+          'Master planning > Master planning > Run > Planned order firming',
+          'Production control > Periodic tasks > Production order status update > Estimation',
+          'Production control > Periodic tasks > Scheduling > Operations scheduling',
+          'Production control > Periodic tasks > Scheduling > Job scheduling',
+        ],
+        docs: [
+          {
+            title: 'Planned orders and firming',
+            url: 'https://learn.microsoft.com/dynamics365/supply-chain/master-planning/planned-orders'
+          }
+        ],
+        pitfalls: ['Planned order journal not set up for the order type', 'Estimation fails on missing cost categories'],
+        prerequisites: ['Approved BOM/route and coverage setup', 'Number sequences for the firmed order type'],
+        tables: ['ReqPlan', 'ReqTransFirmLog', 'ProdTable', 'PurchTable', 'InventTransferTable', 'InventJournalTable'],
+        relations: [
+          {
+            from: 'ReqTransFirmLog',
+            to: 'ProdTable',
+            fields: ['ReqTransFirmLog.InventTransId = ProdTable.InventTransId', 'ReqTransFirmLog.InventTransRefId = ProdTable.ProdId'],
+            badge: 'polymorphic — requires InventTransType',
+            note: 'Firmed production order; only rows with InventTransType = Production resolve here',
+          },
+          {
+            from: 'ReqTransFirmLog',
+            to: 'PurchTable',
+            fields: ['ReqTransFirmLog.InventTransRefId = PurchTable.PurchId'],
+            badge: 'polymorphic — requires InventTransType',
+            note: 'Firmed purchase order; only rows with InventTransType = Purch resolve here',
+          },
+          {
+            from: 'ReqTransFirmLog',
+            to: 'InventTransferTable',
+            fields: ['ReqTransFirmLog.InventTransRefId = InventTransferTable.TransferId'],
+            badge: 'polymorphic — requires InventTransType',
+            note: 'Firmed transfer order; only rows with InventTransType = Transfer resolve here',
+          },
+          {
+            from: 'ReqTransFirmLog',
+            to: 'InventJournalTable',
+            fields: ['ReqTransFirmLog.InventTransRefId = InventJournalTable.JournalId'],
+            badge: 'polymorphic — requires InventTransType',
+            note: 'Firmed inventory journal; only rows with InventTransType = Journal resolve here',
+          },
+          {
+            from: 'ReqTransFirmLog',
+            to: 'ReqPlan',
+            fields: ['ReqTransFirmLog.ReqPlanId = ReqPlan.ReqPlanId'],
+            badge: 'declared FK',
+            note: 'The firming log records which master plan the requirement was fired from; this is the evidence that firming happened',
+          },
+        ],
+      },
+      {
         id: 'release',
         title: 'Release to Warehouse',
         description: 'Release planned/firmed orders to execution.',
@@ -1093,7 +1094,7 @@ export const flows: Flow[] = [
         ],
         pitfalls: ['Reservation hierarchies wrong', 'Route operation times missing'],
         prerequisites: ['Route/BOM approved', 'Warehouse parameters set'],
-        tables: ['ProdTable', 'ProdBOM', 'ProdRoute', 'WHSWorkTable', 'InventTrans'],
+        tables: ['ProdTable', 'ProdBOM', 'ProdRoute', 'WHSWorkTable', 'InventTrans', 'WHSLoadTable'],
         relations: [
           {
             from: 'ProdBOM',
@@ -1137,6 +1138,13 @@ export const flows: Flow[] = [
             badge: 'conditional FK — requires WorkTransType (ProdTablePick vs ProdTablePut)',
             note: 'Two declared relations share OrderNum → ProdId: ProdTablePick and ProdTablePut. A bare navigation returns put-away work for a picking question, so filter WorkTransType',
           },
+          {
+            from: 'InventTrans',
+            to: 'WHSLoadTable',
+            fields: ['InventTrans.LoadId = WHSLoadTable.LoadId'],
+            badge: 'declared FK — outbound load header, not a production-order reference',
+            note: 'Production output leaves through InventTrans, so a WMS-enabled put/load path keeps the load header reachable from this stage. WHSWorkTable.LoadId declares the same relation; both sides are EDT WHSLoadId',
+          },
         ],
       },
       {
@@ -1171,8 +1179,8 @@ export const flows: Flow[] = [
             from: 'ProdJournalBOM',
             to: 'ProdJournalTable',
             fields: ['ProdJournalBOM.JournalId = ProdJournalTable.JournalId'],
-            badge: 'declared FK — related fixed: JournalType',
-            note: 'Consumption lines belong to a production journal header; the header journal type separates picking list from RAF',
+            badge: 'conditional FK — requires JournalType (Picklist for a picking-list journal)',
+            note: 'Consumption lines belong to a production journal header; the AOT relation fixes JournalType = Picklist, so an unfiltered navigation also returns RAF and other journal types',
           },
           {
             from: 'ProdJournalBOM',
@@ -1218,7 +1226,7 @@ export const flows: Flow[] = [
         roles: ['Controller'],
         menuPaths: [
           'Production control > Periodic tasks > Production order status update > End',
-          'Inventory management > Periodic tasks > Inventory closing and adjustment',
+          'Inventory management > Periodic tasks > Closing and adjustment',
           'Production control > Enquiries and reports > Cost analysis reports > Price calculation',
         ],
         docs: [
@@ -1236,14 +1244,14 @@ export const flows: Flow[] = [
             to: 'ProdTable',
             fields: ['ProdCalcTrans.TransRefId = ProdTable.ProdId', 'ProdCalcTrans.CollectRefProdId = ProdTable.CollectRefProdId'],
             badge: 'declared FK',
-            note: 'Production costing by order. ProdCalcTrans has no ProdId field — the declared Table and CollectRefProdId relations carry both pairs',
+            note: 'Production costing by order. ProdCalcTrans has no ProdId field — the declared Table and CollectRefProdId relations carry both pairs. TransRefId EDT CostTransRefId; holds a ProdId only when TransRefType = Production',
           },
           {
             from: 'InventSettlement',
             to: 'InventClosing',
             fields: ['InventSettlement.Voucher = InventClosing.Voucher', 'InventSettlement.TransDate = InventClosing.TransDate'],
             badge: 'declared FK',
-            note: 'The close run is the header and the settlements belong to it; the relation constrains both voucher and transaction date',
+            note: 'The close run is the header and the settlements belong to it; the relation constrains both voucher and transaction date. Declared as a plain AxTableRelation (RelationshipType Association), not AxTableRelationForeignKey. Date EDTs differ: InventSettlement.TransDate is DatePosted, InventClosing.TransDate is TransDate',
           },
           {
             from: 'InventSettlement',
@@ -1257,7 +1265,7 @@ export const flows: Flow[] = [
             to: 'SubledgerVoucherGeneralJournalEntry',
             fields: ['InventSettlement.Voucher = SubledgerVoucherGeneralJournalEntry.Voucher'],
             badge: 'field match — not a declared FK',
-            note: 'Shared Voucher only — no AOT relation and no fk-map edge. Use the next hop to reach the GL header',
+            note: 'Shared Voucher only — no AOT relation and no fk-map edge. Voucher only — not unique without VoucherDataAreaId + AccountingDate: InventSettlement.TransDate is EDT DatePosted while AccountingDate is TransDate, so a bare Voucher join crosses companies and dates. Use the next hop to reach the GL header',
           },
           {
             from: 'SubledgerVoucherGeneralJournalEntry',
@@ -1270,9 +1278,9 @@ export const flows: Flow[] = [
       }
     ],
     edges: [
-      { from: 'forecast', to: 'firm' },
-      { from: 'firm', to: 'bom' },
-      { from: 'bom', to: 'release' },
+      { from: 'forecast', to: 'bom' },
+      { from: 'bom', to: 'firm' },
+      { from: 'firm', to: 'release' },
       { from: 'release', to: 'execute' },
       { from: 'execute', to: 'cost' }
     ]
@@ -7335,7 +7343,7 @@ export const tableDefs: Record<string, TableDef> = {
       { name: "ErrorCause", type: "Enum", note: "Enum ProdErrorCause." },
       { name: "ExecutedPct", type: "Real", note: "EDT ProdExecutedPct." },
       { name: "FinTag", type: "Int64", note: "EDT FinTagRecId." },
-      { name: "FromTime", type: "Time", note: "EDT SchedFromTime." },
+      { name: "FromTime", type: "int32", note: "EDT SchedFromTime; time of day." },
       { name: "HourPrice", type: "Real", note: "EDT ProdHourPrice." },
       { name: "Hours", type: "Real", note: "EDT ProdReportedHours." },
       { name: "JobFinished", type: "Enum", note: "EDT ProdFinishedJob; enum NoYes." },
@@ -7360,7 +7368,7 @@ export const tableDefs: Record<string, TableDef> = {
       { name: "QtyPrice", type: "Real", note: "EDT ProdQtyPrice." },
       { name: "ReleaseKindId_RU", type: "String", note: "EDT ProdReleaseRejectKindId_RU." },
       { name: "StornoPhysical_RU", type: "Enum", note: "EDT Storno_RU; enum NoYes." },
-      { name: "ToTime", type: "Time", note: "EDT SchedToTime." },
+      { name: "ToTime", type: "int32", note: "EDT SchedToTime; time of day." },
       { name: "TransDate", type: "Date", note: "EDT JournalTransDate." },
       { name: "Voucher", type: "String", note: "EDT Voucher." },
       { name: "Worker", type: "Int64", note: "EDT ProdWorker." },
@@ -7380,7 +7388,7 @@ export const tableDefs: Record<string, TableDef> = {
       { name: "CancelClosingRefRecId", type: "Int64", note: "EDT InventClosingRefRecId." },
       { name: "CancelRecalculation", type: "Enum", note: "EDT InventCostCancelRecalculation; enum NoYes." },
       { name: "Cancellation", type: "Enum", note: "Enum NoYes." },
-      { name: "End", type: "Time", note: "EDT ToTime." },
+      { name: "End", type: "int32", note: "EDT ToTime; time of day." },
       { name: "Executed", type: "Date", note: "EDT TransDate." },
       { name: "HelpersCreated", type: "Enum", note: "EDT NoYesId; enum NoYes." },
       { name: "InventCostStatus", type: "Enum", note: "Enum InventCostStatus." },
@@ -7397,9 +7405,9 @@ export const tableDefs: Record<string, TableDef> = {
       { name: "PeriodCode", type: "String", note: "EDT DateCode." },
       { name: "ProdJournal", type: "Enum", note: "Enum NoYes." },
       { name: "RunNum", type: "Int", note: "EDT InventClosingRunNum." },
-      { name: "RunRecalculation", type: "Enum", note: "EDT InventCostRunRecalculation." },
+      { name: "RunRecalculation", type: "Enum", note: "EDT InventCostRunRecalculation; enum NoYes." },
       { name: "ShouldSummarizeInfolog", type: "Enum", note: "Enum NoYes." },
-      { name: "Start", type: "Time", note: "EDT FromTime." },
+      { name: "Start", type: "int32", note: "EDT FromTime; time of day." },
       { name: "StopOnError", type: "Enum", note: "EDT NoYesId; enum NoYes." },
       { name: "StopRunning", type: "Enum", note: "EDT NoYesId; enum NoYes." },
       { name: "StornoAdjustment_RU", type: "Enum", note: "Enum UnknownNoYes." },
