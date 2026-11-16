@@ -1296,7 +1296,7 @@ export const flows: Flow[] = [
         title: 'Item Setup',
         description: 'Dimensions, tracking, and storage policies.',
         roles: ['Warehouse', 'Controller'],
-        menuPaths: ['Product information management > Released products'],
+        menuPaths: ['Product information management > Products > Released products'],
         docs: [
           {
             title: 'Product information overview',
@@ -1437,8 +1437,8 @@ export const flows: Flow[] = [
             from: 'WHSWorkTable',
             to: 'InventTransferTable',
             fields: ['WHSWorkTable.OrderNum = InventTransferTable.TransferId'],
-            badge: 'conditional FK — requires WorkTransType (TransferOrderIssue vs TransferOrderReciept)',
-            note: 'If WMS, a transfer order generates warehouse work. Two AOT relations on the same field pair, gated by Fixed discriminator: TransferOrderIssue (WorkTransType = WHSWorkTransType::TransferIssue) and TransferOrderReciept (WorkTransType = WHSWorkTransType::TransferReceipt). Enum value spelled "Reciept" in AOT. No relation exists between InventTransferLine and WHSWorkTable',
+            badge: 'conditional FK — requires WorkTransType = WHSWorkTransType::TransferIssue or WHSWorkTransType::TransferReceipt',
+            note: 'If WMS, a transfer order generates warehouse work. Two AOT relations on the same field pair, gated by Fixed discriminator: TransferOrderIssue (WorkTransType = WHSWorkTransType::TransferIssue) and TransferOrderReciept (WorkTransType = WHSWorkTransType::TransferReceipt). Relation name spelled "Reciept" in AOT. No relation exists between InventTransferLine and WHSWorkTable',
           }
         ]
       },
@@ -5707,7 +5707,7 @@ export const tableDefs: Record<string, TableDef> = {
 
   InventSettlement: {
     name: "InventSettlement",
-    description: "Inventory cost settlement record created by the inventory close process. Each row links a financially posted receipt transaction (TransRecId) to a financially posted issue transaction (SettleTransId), recording the quantity settled and the cost adjustment amount. Cancelled settlements reference the original via the Cancelled FK.",
+    description: "Inventory cost settlement record created by the inventory close process. Each row links a financially posted receipt transaction (TransRecId) to a financially posted issue transaction (SettleTransId), recording the quantity settled and the cost adjustment amount. Cancelled settlements carry a Cancelled flag and settle against the same InventTransId via SettleTransId; the table's only self-reference is SettleTransId → SettleTransId, declared with RelationshipType Link.",
     module: "Cost Management / Inventory Management – transaction line (per legal entity)",
     docsUrl: "https://learn.microsoft.com/en-us/common-data-model/schema/core/operationscommon/tables/supplychain/inventory/transactionline/inventsettlement",
     fields: [
