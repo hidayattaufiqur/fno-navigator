@@ -2275,22 +2275,6 @@
         {
           "tables": [
             "Currency",
-            "InventJournalTrans",
-            "ProjItemTrans",
-            "SalesLine",
-            "CompanyInfo"
-          ],
-          "score": 16,
-          "qualityClass": 2,
-          "reasonCodes": [
-            "business-key-joins",
-            "curated-tables",
-            "rare-relations"
-          ]
-        },
-        {
-          "tables": [
-            "Currency",
             "BankAccountTrans",
             "BankChequeTable",
             "BankAccountTable",
@@ -2403,7 +2387,7 @@
         {
           "tables": [
             "Currency",
-            "CustInvoiceTrans",
+            "ProjItemTrans",
             "SalesLine",
             "CompanyInfo"
           ],
@@ -2418,7 +2402,7 @@
         {
           "tables": [
             "Currency",
-            "ProjItemTrans",
+            "CustInvoiceTrans",
             "SalesLine",
             "CompanyInfo"
           ],
@@ -2994,6 +2978,22 @@
             "Currency",
             "TaxTrans",
             "SalesLine",
+            "CompanyInfo"
+          ],
+          "score": 9,
+          "qualityClass": 0,
+          "reasonCodes": [
+            "plumbing-detour",
+            "curated-tables",
+            "rare-relations"
+          ]
+        },
+        {
+          "tables": [
+            "Currency",
+            "InventTransferLine",
+            "InventTransOrigin",
+            "Kanban",
             "CompanyInfo"
           ],
           "score": 9,

@@ -608,13 +608,13 @@ export const flows: Flow[] = [
         ],
         pitfalls: ['Financial dimensions missing', 'Catalog access not set'],
         prerequisites: ['Vendors and products released', 'Financial dimensions'],
-        tables: ['PurchReqTable', 'PurchReqLine', 'VendTable', 'DimensionAttributeValueCombination'],
+        tables: ['PurchReqTable', 'PurchReqLine', 'VendTable', 'DimensionAttributeValueCombination', 'PurchReqTableHistory'],
         approvals: ['Requisition approval workflow']
       },
       {
         id: 'po',
         title: 'Issue Purchase Order',
-        description: 'Convert approved req or create PO direct.',
+        description: 'Convert approved req or create PO direct. Approval workflow commits the order internally; telling the supplier is a separate confirmation step, and the two are not the same event.',
         roles: ['Buyer'],
         menuPaths: ['Procurement and sourcing > Purchase orders > All purchase orders'],
         docs: [
@@ -623,15 +623,23 @@ export const flows: Flow[] = [
             url: 'https://learn.microsoft.com/dynamics365/supply-chain/procurement/purchase-order-overview'
           }
         ],
-        pitfalls: ['Posting profile not set', 'Vendor delivery terms missing'],
+        pitfalls: ['Vendor delivery terms missing', 'Ordering vendor and invoice vendor confused — OrderAccount and InvoiceAccount are separate FKs and may point at different vendors'],
         prerequisites: ['Vendor, terms, charges, taxes'],
-        tables: ['PurchTable', 'PurchLine', 'VendTable', 'TaxGroupHeading', 'MarkupAutoTable', 'AgreementHeader', 'AgreementLine'],
+        tables: ['PurchTable', 'PurchLine', 'VendTable', 'TaxGroupHeading', 'MarkupAutoTable', 'AgreementHeader', 'AgreementLine', 'PurchTableHistory', 'PurchLineHistory'],
         relations: [
           {
             from: 'PurchTable',
             to: 'VendTable',
             fields: ['PurchTable.OrderAccount = VendTable.AccountNum'],
-            note: 'PO header references vendor',
+            badge: 'declared FK',
+            note: 'OrderAccount identifies the supplier receiving the PO; InvoiceAccount identifies the vendor to invoice and may differ',
+          },
+          {
+            from: 'PurchTable',
+            to: 'VendTable',
+            fields: ['PurchTable.InvoiceAccount = VendTable.AccountNum'],
+            badge: 'declared FK',
+            note: 'A second, independent vendor FK on the same header (AOT relation InvoiceVendor): with third-party billing the AP creditor is InvoiceAccount, not OrderAccount',
           },
           {
             from: 'PurchLine',
@@ -655,25 +663,70 @@ export const flows: Flow[] = [
         approvals: ['PO approval workflow']
       },
       {
+        id: 'confirm',
+        title: 'Confirm Purchase Order',
+        description: 'Confirm the approved PO as a document action, then print/send it to the supplier; confirmation advances PurchStatus on PurchTable to Backorder. This build has no PurchConfirmJour/PurchConfirmTrans confirmation journal, so confirmation is not a posted journal row — the sales-side CustConfirmJour split does not transfer here. Where purchase order change management is enabled, amendments are versioned history rows and may require reapproval or reconfirmation; check the configured policy.',
+        roles: ['Buyer'],
+        menuPaths: ['Procurement and sourcing > Purchase orders > All purchase orders'],
+        docs: [
+          {
+            title: 'Purchase orders overview',
+            url: 'https://learn.microsoft.com/dynamics365/supply-chain/procurement/purchase-order-overview'
+          }
+        ],
+        pitfalls: [
+          'Confirmation modelled as a posted journal — no PurchConfirmJour/PurchConfirmTrans exists in this build',
+          'Confirmed but never sent: PurchStatus advancing does not prove the supplier received the order',
+          'Post-confirmation amendment without change management reruns approval — where change management is on, each version is a PurchTableHistory/PurchLineHistory row',
+        ],
+        prerequisites: ['PO approved', 'Print management / vendor contact destination'],
+        tables: ['PurchTable', 'PurchLine', 'PurchTableHistory', 'PurchLineHistory'],
+        relations: [
+          {
+            from: 'PurchTable',
+            to: 'PurchTableHistory',
+            fields: ['PurchTableHistory.PurchId = PurchTable.PurchId'],
+            badge: 'declared FK',
+            note: 'With change management enabled each PO version is a dated history row (ValidFrom/ValidTo) against the same PurchId, not an overwrite of the live header',
+          },
+          {
+            from: 'PurchLine',
+            to: 'PurchLineHistory',
+            fields: ['PurchLineHistory.PurchId = PurchLine.PurchId', 'PurchLineHistory.LineNumber = PurchLine.LineNumber'],
+            badge: 'declared FK',
+            note: 'Line-level version history: the confirmed line snapshot, keyed by PO id and line number',
+          },
+        ],
+      },
+      {
         id: 'receipt',
         title: 'Product Receipt',
-        description: 'Receive goods/services and update on-hand.',
+        description: 'Receive goods/services and update on-hand. Posting the receipt is the action on the purchase order; the product receipt journal is the posted result you review afterwards.',
         roles: ['Warehouse'],
-        menuPaths: ['Accounts payable > Inquiries and reports > Purchase orders > Product receipt'],
+        menuPaths: ['Procurement and sourcing > Purchase orders > All purchase orders > Receive > Product receipt'],
         docs: [
           {
             title: 'Product receipts against purchase orders',
             url: 'https://learn.microsoft.com/dynamics365/supply-chain/procurement/product-receipt-against-purchase-orders'
           }
         ],
-        pitfalls: ['Unit mismatch vs invoice', '3-way match tolerance exceeded'],
+        pitfalls: ['Unit mismatch vs invoice'],
         prerequisites: ['Item model group', 'Unit conversions'],
-        tables: ['PurchTable', 'PurchLine', 'VendPackingSlipJour', 'VendPackingSlipTrans', 'InventTrans']
+        tables: ['PurchTable', 'PurchLine', 'VendPackingSlipJour', 'VendPackingSlipTrans', 'InventTrans'],
+        relations: [
+          {
+            from: 'VendPackingSlipJour',
+            to: 'PurchTable',
+            fields: ['VendPackingSlipJour.PurchId = PurchTable.PurchId'],
+            badge: 'declared FK',
+            note: 'Posted receipt header belongs to the purchase order it was received against',
+          },
+        ],
       },
       {
         id: 'vendor-invoice',
         title: 'Vendor Invoice',
-        description: 'Match invoice to receipt and post liabilities.',
+        description: 'Match invoice to receipt and post liabilities. Invoice matching can be disabled, two-way (PO/invoice), or three-way (PO/receipt/invoice), depending on the active configuration. Check vendor/item policy, invoice-matching parameters, and price/quantity tolerances; variance handling may warn or block posting. Posting creates the AP liability and clears receipt accrual as configured; review the posted voucher/GL lines afterwards.',
         roles: ['AP'],
         menuPaths: ['Accounts payable > Invoices > Pending vendor invoices'],
         docs: [
@@ -682,59 +735,184 @@ export const flows: Flow[] = [
             url: 'https://learn.microsoft.com/dynamics365/finance/accounts-payable/vendor-invoices-overview'
           }
         ],
-        pitfalls: ['Tax code mismatch', 'Posting profile missing', '3-way match failed'],
-        prerequisites: ['Vendor posting profiles', 'Tax groups'],
-        tables: ['VendInvoiceJour', 'VendInvoiceTrans', 'VendTrans', 'TaxTrans', 'SubledgerVoucherGeneralJournalEntry', 'GeneralJournalEntry', 'VendInvoiceInfoTable', 'VendInvoiceInfoLine'],
+        pitfalls: [
+          'Tax code mismatch',
+          'Vendor posting profile missing or invalid; invoice posting may fail',
+          'Invoice match variance exceeds the configured tolerance or is blocked by policy',
+          'VendInvoiceTrans.LineNum is a decimal LineNum, not the PO line number — match PO lines on PurchID + PurchaseLineLineNumber, and it is a field match, not a declared FK',
+          'Active matching setup precedence is not documented here: confirm the effective policy in the target environment before diagnosing a failed match',
+        ],
+        prerequisites: ['Vendor posting profiles', 'Tax groups', 'Invoice matching policy and tolerances'],
+        tables: ['VendInvoiceJour', 'VendInvoiceTrans', 'VendTrans', 'TaxTrans', 'SubledgerVoucherGeneralJournalEntry', 'GeneralJournalEntry', 'GeneralJournalAccountEntry', 'VendInvoiceInfoTable', 'VendInvoiceInfoLine', 'PurchTable', 'PurchLine', 'VendTable', 'VendItemMatchingPolicy', 'VendInvoiceMatching', 'VendInvoiceMatchingLine', 'VendParameters'],
         relations: [
           {
             from: 'VendInvoiceTrans',
             to: 'PurchLine',
-            fields: ['VendInvoiceTrans.PurchID = PurchLine.PurchId', 'VendInvoiceTrans.LineNum = PurchLine.LineNumber'],
-            note: 'Invoice lines match PO lines',
+            fields: ['VendInvoiceTrans.PurchID = PurchLine.PurchId', 'VendInvoiceTrans.PurchaseLineLineNumber = PurchLine.LineNumber'],
+            badge: 'field match — not a declared FK',
+            note: 'Match PO id plus the real PO line number (both sides TradeLineNumber, Int64). VendInvoiceTrans.LineNum is a Real LineNum and is not the PO line number; no AOT relation exists for this pair',
           },
           {
             from: 'VendInvoiceJour',
             to: 'PurchTable',
             fields: ['VendInvoiceJour.PurchId = PurchTable.PurchId'],
+            badge: 'declared FK',
             note: 'Posted vendor invoice header references the purchase order it was posted from',
           },
           {
             from: 'VendInvoiceInfoTable',
             to: 'PurchTable',
-            fields: ['VendInvoiceInfoTable.PurchId = PurchTable.PurchId', 'VendInvoiceInfoTable.OrderAccount = VendTable.AccountNum'],
+            fields: ['VendInvoiceInfoTable.PurchId = PurchTable.PurchId'],
+            badge: 'declared FK',
             note: 'Pending vendor invoice header before posting; posting creates VendInvoiceJour',
+          },
+          {
+            from: 'VendInvoiceInfoTable',
+            to: 'VendTable',
+            fields: ['VendInvoiceInfoTable.OrderAccount = VendTable.AccountNum'],
+            badge: 'declared FK',
+            note: 'Ordering/submitting vendor (AOT relation VendTable_OrderAccount); may differ from the invoice creditor',
+          },
+          {
+            from: 'VendInvoiceInfoTable',
+            to: 'VendTable',
+            fields: ['VendInvoiceInfoTable.InvoiceAccount = VendTable.AccountNum'],
+            badge: 'declared FK',
+            note: 'Creditor/invoice vendor (AOT relation VendTable_InvoiceAccount) — the party the invoice actually credits',
           },
           {
             from: 'VendInvoiceInfoLine',
             to: 'VendInvoiceInfoTable',
-            fields: ['VendInvoiceInfoLine.ParmId = VendInvoiceInfoTable.ParmId', 'VendInvoiceInfoLine.PurchLineRecId = PurchLine.RecId'],
-            note: 'Pending vendor invoice line; FK to VendInvoiceInfoTable header via ParmId',
+            fields: ['VendInvoiceInfoLine.ParmId = VendInvoiceInfoTable.ParmId'],
+            badge: 'declared FK',
+            note: 'Pending invoice line to header via the posting session key; keep separate from the PO-line relation',
+          },
+          {
+            from: 'VendInvoiceInfoLine',
+            to: 'PurchLine',
+            fields: ['VendInvoiceInfoLine.PurchLineRecId = PurchLine.RecId'],
+            badge: 'declared FK',
+            note: 'Valid declared FK from the pending invoice line to the PO line being invoiced',
+          },
+          {
+            from: 'VendInvoiceJour',
+            to: 'SubledgerVoucherGeneralJournalEntry',
+            fields: ['VendInvoiceJour.LedgerVoucher = SubledgerVoucherGeneralJournalEntry.Voucher'],
+            badge: 'field match — no declared AOT relation',
+            note: 'Match the posted AP voucher to the subledger/GL bridge; preserve company context when matching',
+          },
+          {
+            from: 'SubledgerVoucherGeneralJournalEntry',
+            to: 'GeneralJournalEntry',
+            fields: ['SubledgerVoucherGeneralJournalEntry.GeneralJournalEntry = GeneralJournalEntry.RecId'],
+            badge: 'declared FK',
+            note: 'The bridge points to the posted GL journal header',
+          },
+          {
+            from: 'GeneralJournalAccountEntry',
+            to: 'GeneralJournalEntry',
+            fields: ['GeneralJournalAccountEntry.GeneralJournalEntry = GeneralJournalEntry.RecId'],
+            badge: 'declared FK',
+            note: 'GL account-entry lines provide the debit/credit detail for review',
           },
         ],
         approvals: ['Invoice approval workflow']
       },
       {
+        id: 'returns',
+        title: 'Return Order / Vendor Credit',
+        optional: true,
+        description: 'Optional branch: goods go back to the vendor or the invoice is corrected. The certain route is a return PO with negative quantities — confirm it, post product receipt for the return shipment, then post and settle the vendor credit note as applicable. TransactionReversalTrans is the generic reversal-lineage table (RefTableId + RefRecId); whether it stores AP invoice reversals in this build is unverified, so it is not modelled as an AP relation.',
+        roles: ['Buyer', 'Warehouse', 'AP'],
+        menuPaths: [
+          'Procurement and sourcing > Purchase orders > All purchase orders',
+          'Accounts payable > Invoices > Pending vendor invoices',
+        ],
+        docs: [
+          {
+            title: 'Create a purchase return order',
+            url: 'https://learn.microsoft.com/dynamics365/supply-chain/procurement/tasks/create-purchase-return-order'
+          },
+        ],
+        pitfalls: [
+          'Return PO line quantities must be negative; a positive line is a new supply order, not a return',
+          'VendInvoiceJour has no IsCorrection/ReversedRecId field in this build — a posted PO invoice is corrected with a vendor credit note, not by reversing the journal',
+          'TransactionReversalTrans is generic; AP invoice usage is unverified, so do not report it as an AP reversal link',
+        ],
+        prerequisites: ['Original posted invoice or receipt', 'Return reason / disposition'],
+        tables: ['PurchTable', 'PurchLine', 'VendPackingSlipJour', 'VendPackingSlipTrans', 'VendInvoiceJour', 'VendInvoiceTrans', 'VendTrans', 'VendSettlement'],
+        relations: [
+          {
+            from: 'VendPackingSlipJour',
+            to: 'PurchTable',
+            fields: ['VendPackingSlipJour.PurchId = PurchTable.PurchId'],
+            badge: 'declared FK',
+            note: 'Posted return receipt belongs to the return PO',
+          },
+          {
+            from: 'VendPackingSlipTrans',
+            to: 'VendPackingSlipJour',
+            fields: ['VendPackingSlipTrans.VendPackingSlipJour = VendPackingSlipJour.RecId'],
+            badge: 'declared FK',
+            note: 'Receipt lines under the posted receipt header',
+          },
+        ],
+      },
+      {
         id: 'vendor-payment',
         title: 'Vendor Payment',
-        description: 'Propose and settle vendor payments.',
+        description: 'Propose and settle vendor payments. A payment proposal (VendPaymProposalEdit) generates and edits the payment journal from due open items; manual payment journal entry in Accounts payable > Payments > Payment journal is a separate route to the same posting. Payment posts to bank/cash and settles the vendor open item.',
         roles: ['AP'],
-        menuPaths: ['Accounts payable > Payments > Payment journal'],
+        menuPaths: [
+          'Accounts payable > Payments > Payment journal',
+        ],
         docs: [
           {
             title: 'Vendor payment overview',
             url: 'https://learn.microsoft.com/dynamics365/finance/cash-bank-management/tasks/vendor-payment-overview'
           }
         ],
-        pitfalls: ['Method of payment / bank not set', 'Settlement parameters wrong'],
+        pitfalls: [
+          'Method of payment / bank not set',
+          'Settlement parameters wrong',
+          'Open-item state lives in VendTransOpen, not on VendTrans — VendTrans has Closed, there is no Open field',
+          'Payment proposal and manual journal are different entry routes; a proposal not transferred/posted leaves the journal unposted',
+        ],
         prerequisites: ['Bank account', 'Method of payment', 'Vendor terms'],
-        tables: ['VendTrans', 'VendSettlement', 'LedgerJournalTable', 'LedgerJournalTrans', 'BankAccountTable']
+        tables: ['VendTrans', 'VendTransOpen', 'VendSettlement', 'LedgerJournalTable', 'LedgerJournalTrans', 'BankAccountTable'],
+        relations: [
+          {
+            from: 'VendTransOpen',
+            to: 'VendTrans',
+            fields: ['VendTransOpen.RefRecId = VendTrans.RecId'],
+            badge: 'declared FK',
+            note: 'Open-item due date and remaining amount live on VendTransOpen; the proposal and settlement run read this table, not a VendTrans.Open field',
+          },
+          {
+            from: 'LedgerJournalTrans',
+            to: 'LedgerJournalTable',
+            fields: ['LedgerJournalTrans.JournalNum = LedgerJournalTable.JournalNum'],
+            badge: 'declared FK',
+            note: 'Payment journal lines belong to the payment journal header',
+          },
+          {
+            from: 'LedgerJournalTrans',
+            to: 'BankAccountTable',
+            fields: ['LedgerJournalTrans.PaymentAccount = BankAccountTable.AccountID'],
+            badge: 'declared FK',
+            note: 'Payment journal line pays from / into this bank account',
+          },
+        ],
       }
     ],
     edges: [
       { from: 'req', to: 'po' },
-      { from: 'po', to: 'receipt' },
+      { from: 'po', to: 'confirm' },
+      { from: 'confirm', to: 'receipt' },
       { from: 'receipt', to: 'vendor-invoice' },
-      { from: 'vendor-invoice', to: 'vendor-payment' }
+      { from: 'vendor-invoice', to: 'vendor-payment' },
+      { from: 'vendor-invoice', to: 'returns' },
+      { from: 'returns', to: 'vendor-payment' }
     ]
   },
   {
@@ -3634,7 +3812,7 @@ export const tableDefs: Record<string, TableDef> = {
       { name: "PurchId", type: "String", note: "Purchase order number; natural primary key (e.g. PO-000456)" },
       { name: "OrderAccount", type: "String", fkTarget: "VendTable.AccountNum", note: "Vendor account placing the order from; drives default fields" },
       { name: "InvoiceAccount", type: "String", fkTarget: "VendTable.AccountNum", note: "Vendor account for invoicing (may differ from OrderAccount)" },
-      { name: "PurchStatus", type: "Int32", note: "Enum: None=0, OpenOrder=1, Received=2, Invoiced=3, Cancelled=4" },
+      { name: "PurchStatus", type: "Int32", note: "Enum: None=0, Backorder=1, Received=2, Invoiced=3, Canceled=4 (AOT symbols; Backorder is displayed as \"Open order\")" },
       { name: "DocumentStatus", type: "Int32", note: "Enum tracks document progress: None, PurchaseOrder, ProductReceipt, Invoice" },
       { name: "CurrencyCode", type: "String", fkTarget: "Currency.CurrencyCode", note: "Transaction currency for the order" },
       { name: "Payment", type: "String", fkTarget: "PaymTerm.PaymTermId", note: "Default payment terms for the purchase order." },
@@ -3749,7 +3927,7 @@ export const tableDefs: Record<string, TableDef> = {
     fields: [
       { name: "RecId", type: "Int64", note: "Surrogate primary key" },
       { name: "PurchId", type: "String", fkTarget: "PurchTable.PurchId", note: "Links line to purchase order header" },
-      { name: "LineNumber", type: "Decimal", note: "Line number within the purchase order." },
+      { name: "LineNumber", type: "Int64", note: "Line number within the purchase order; EDT TradeLineNumber. VendInvoiceTrans.PurchaseLineLineNumber matches this field" },
       { name: "ItemId", type: "String", fkTarget: "InventTable.ItemId", note: "Product ordered; null if procurement category line" },
       { name: "InventDimId", type: "String", fkTarget: "InventDim.inventDimId", note: "Inventory dimension combination (site, warehouse, batch, serial, etc.)" },
       { name: "PurchQty", type: "Decimal", note: "Ordered quantity in purchase unit of measure" },
@@ -3956,8 +4134,9 @@ export const tableDefs: Record<string, TableDef> = {
     fields: [
       { name: "RecId", type: "Int64", note: "Surrogate primary key" },
       { name: "InvoiceId", type: "String", fkTarget: "VendInvoiceJour.InvoiceId", note: "Invoice number; combined with VendAccount identifies the journal header" },
-      { name: "PurchID", type: "String", fkTarget: "PurchLine.PurchId", note: "Purchase order number the invoice line originates from (capital ID in AOT)." },
-      { name: "LineNum", type: "Decimal", fkTarget: "PurchLine.LineNumber", note: "PO line number; combined with PurchId links back to PurchLine" },
+      { name: "PurchID", type: "String", fkTarget: "PurchTable.PurchId", note: "Purchase order number the invoice line originates from (capital ID in AOT). Declared header FK; the PO-line match is the field pair below, not a schema FK." },
+      { name: "LineNum", type: "Real", note: "EDT LineNum — a decimal line sequence on the invoice line, not the PO line number. Do not join this to PurchLine.LineNumber" },
+      { name: "PurchaseLineLineNumber", type: "Int64", note: "EDT TradeLineNumber — the PO line number. Pair with PurchID to match PurchLine.LineNumber; field match, not a declared FK" },
       { name: "ItemId", type: "String", fkTarget: "InventTable.ItemId", note: "Product invoiced on this line" },
       { name: "Qty", type: "Decimal", note: "Invoiced quantity" },
       { name: "LineAmountMST", type: "Decimal", note: "Net line amount in accounting currency" },
@@ -3967,7 +4146,7 @@ export const tableDefs: Record<string, TableDef> = {
 
   VendTrans: {
     name: "VendTrans",
-    description: "Vendor accounts-payable subledger transaction. Every posted AP event (invoice, payment, credit note, adjustment) creates a record here; the open balance is the sum of unsettled records.",
+    description: "Vendor accounts-payable subledger transaction. Every posted AP event (invoice, payment, credit note, adjustment) creates a record here. Whether an item is still payable is not stored on this table: the open amount and due date live on VendTransOpen, and this table carries Closed (a settlement date), not an Open flag.",
     module: "Accounts Payable",
     docsUrl: "https://learn.microsoft.com/en-us/common-data-model/schema/core/operationscommon/tables/finance/accountspayable/transaction/vendtrans",
     fields: [
@@ -3995,6 +4174,107 @@ export const tableDefs: Record<string, TableDef> = {
       { name: "SettleAmountMST", type: "Decimal", note: "Amount settled in accounting currency for this link" },
       { name: "SettleAmountCur", type: "Decimal", note: "Amount settled in transaction currency" },
       { name: "TransDate", type: "Date", note: "Date on which settlement was applied" },
+    ],
+  },
+
+  VendTransOpen: {
+    name: "VendTransOpen",
+    description: "Open-item projection of a vendor transaction. One row per VendTrans that is not fully settled, holding the due date and the amount still open. Vendor aging, payment proposals and settlement all read this table.",
+    module: "Accounts Payable",
+    docsUrl: "https://learn.microsoft.com/en-us/common-data-model/schema/core/operationscommon/tables/finance/accountspayable/transaction/vendtransopen",
+    fields: [
+      { name: "RefRecId", type: "Int64", fkTarget: "VendTrans.RecId", note: "The VendTrans transaction this open item belongs to (EDT VendTransRefRecId)" },
+      { name: "DueDate", type: "Date", note: "Payment due date derived from the vendor terms; aging and payment proposals run off this date" },
+      { name: "AmountCur", type: "Real", note: "Amount still open in the transaction currency" },
+      { name: "AmountMST", type: "Real", note: "Amount still open in the accounting currency" },
+    ],
+  },
+
+  PurchTableHistory: {
+    name: "PurchTableHistory",
+    description: "Versioned snapshot of a purchase order header. Written when purchase order change management is enabled: each confirmed amendment becomes a dated row (ValidFrom/ValidTo) against the same PurchId rather than overwriting the live header.",
+    module: "Procurement and Sourcing",
+    fields: [
+      { name: "PurchId", type: "String", note: "Purchase order number the history row belongs to (EDT PurchIdBase)" },
+      { name: "PurchStatus", type: "Enum", note: "Enum PurchStatus as at this version: None=0, Backorder=1, Received=2, Invoiced=3, Canceled=4" },
+      { name: "ValidFrom", type: "UtcDateTime", note: "Start of the version's validity window" },
+      { name: "ValidTo", type: "UtcDateTime", note: "End of the version's validity window; the open-ended row is the current version" },
+    ],
+  },
+
+  PurchLineHistory: {
+    name: "PurchLineHistory",
+    description: "Versioned snapshot of a purchase order line, written alongside PurchTableHistory under purchase order change management. Keyed by PO id plus line number.",
+    module: "Procurement and Sourcing",
+    fields: [
+      { name: "PurchId", type: "String", note: "Purchase order number (EDT PurchIdBase)" },
+      { name: "LineNumber", type: "Int64", note: "PO line number; EDT TradeLineNumber, same domain as PurchLine.LineNumber" },
+      { name: "ItemId", type: "String", note: "Item on the line at this version" },
+      { name: "PurchQty", type: "Real", note: "Ordered quantity at this version" },
+      { name: "PurchPrice", type: "Real", note: "Unit price at this version" },
+      { name: "ValidFrom", type: "UtcDateTime", note: "Start of the version's validity window" },
+      { name: "ValidTo", type: "UtcDateTime", note: "End of the version's validity window" },
+    ],
+  },
+
+  PurchReqTableHistory: {
+    name: "PurchReqTableHistory",
+    description: "Versioned snapshot of a purchase requisition header, written when requisition change management is enabled so each submitted/approved revision is retained.",
+    module: "Procurement and Sourcing",
+    fields: [
+      { name: "PurchReqId", type: "String", note: "Requisition number (EDT PurchReqId)" },
+      { name: "PurchReqTable", type: "Int64", fkTarget: "PurchReqTable.RecId", note: "RecId of the live requisition header this version belongs to (EDT RefRecId)" },
+      { name: "Status", type: "Enum", note: "Requisition status at this version; enum PurchReqRequisitionStatus" },
+      { name: "ValidFrom", type: "UtcDateTime", note: "Start of the version's validity window" },
+      { name: "ValidTo", type: "UtcDateTime", note: "End of the version's validity window" },
+    ],
+  },
+
+  VendItemMatchingPolicy: {
+    name: "VendItemMatchingPolicy",
+    description: "Vendor/item invoice-matching policy exception. Overrides the invoice-matching policy from Accounts payable parameters for a specific vendor and item combination.",
+    module: "Accounts Payable",
+    fields: [
+      { name: "VendAccount", type: "String", fkTarget: "VendTable.AccountNum", note: "Vendor the exception applies to" },
+      { name: "ItemId", type: "String", fkTarget: "InventTable.ItemId", note: "Item the exception applies to" },
+      { name: "MatchingPolicy", type: "Enum", note: "Enum PurchMatchingPolicyOption: no matching, two-way (PO/invoice), or three-way (PO/receipt/invoice)" },
+    ],
+  },
+
+  VendInvoiceMatching: {
+    name: "VendInvoiceMatching",
+    description: "Invoice-matching header for a pending vendor invoice. Holds the expected PO totals and document-level tolerances the invoice is compared against during matching.",
+    module: "Accounts Payable",
+    fields: [
+      { name: "ParmId", type: "String", note: "Posting session key linking the match to its VendInvoiceInfoTable header" },
+      { name: "TableRefId", type: "String", note: "Table reference id scoping the match (EDT TradeLineRefId)" },
+      { name: "TotalPriceTolerancePercentage", type: "Real", note: "Allowed percentage variance on the matched total before the variance is flagged" },
+      { name: "ExpectedBalance", type: "Real", note: "Expected invoice balance derived from the matched PO/receipt lines" },
+    ],
+  },
+
+  VendInvoiceMatchingLine: {
+    name: "VendInvoiceMatchingLine",
+    description: "Line-level invoice-matching result. Compares each invoice line's quantity and price against the PO/receipt line and records the resulting price variance.",
+    module: "Accounts Payable",
+    fields: [
+      { name: "MatchingPolicy", type: "Enum", note: "Enum PurchMatchingPolicyOption applied to this line" },
+      { name: "ExpectedQty", type: "Real", note: "Quantity expected from the matched PO/receipt line" },
+      { name: "ExpectedPrice", type: "Real", note: "Unit price expected from the matched PO line" },
+      { name: "PriceTolerancePercentage", type: "Real", note: "Allowed percentage price variance for this line" },
+      { name: "ExtendedPriceVarianceAmount", type: "Real", note: "Actual extended-price variance between invoice and expected line" },
+    ],
+  },
+
+  VendParameters: {
+    name: "VendParameters",
+    description: "Accounts payable module parameters (one row per legal entity). Carries the default invoice-matching policy, whether matching is enabled, and the document-level price tolerance.",
+    module: "Accounts Payable",
+    fields: [
+      { name: "MatchingPolicy", type: "Enum", note: "Default enum PurchMatchingPolicyOption for the legal entity; vendor/item exceptions in VendItemMatchingPolicy override it" },
+      { name: "UseInvoiceMatching", type: "Enum", note: "Enum UnknownNoYes — whether invoice matching is enabled at all" },
+      { name: "PolicyViolationAction", type: "Enum", note: "Enum InvoicePolicyViolationStatus — whether a matching-policy violation warns or blocks posting" },
+      { name: "TotalPriceTolerancePercentage", type: "Real", note: "Default allowed percentage variance on the invoice total" },
     ],
   },
 
