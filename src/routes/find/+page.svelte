@@ -605,7 +605,7 @@
     <h2>Find Table Path</h2>
     <p class="lede">
       Find how two D365FO tables connect through foreign keys. Uses
-      <strong>43,584 verified associations</strong> across 5,587 tables — the full Microsoft Dynamics
+      <strong>43,616 verified associations</strong> across 5,587 tables — the full Microsoft Dynamics
       database graph.
     </p>
   </div>
@@ -743,7 +743,7 @@
       <div class="loading-text">
         {#if $fkLoadState === 'loading'}
           <strong>Loading FK map…</strong>
-          <span class="mini">Fetching 43,584 verified table associations for the first time (~2.4 MB). This only happens once per session.</span>
+          <span class="mini">Fetching 43,616 verified table associations for the first time (~2.4 MB). This only happens once per session.</span>
         {:else}
           <strong>Searching for paths…</strong>
           <span class="mini">Running a guided search across the FK graph from <em>{sourceTable}</em> to <em>{targetTable}</em>.</span>
