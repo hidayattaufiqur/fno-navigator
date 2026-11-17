@@ -1622,6 +1622,13 @@ export const flows: Flow[] = [
         relations: [
           {
             from: 'ProjEmplTrans',
+            to: 'HcmWorker',
+            fields: ['ProjEmplTrans.Worker = HcmWorker.RecId'],
+            badge: 'field match — not a declared FK',
+            note: 'Hidden deprecated column (EDT ProjWorkerRecId); no AOT relation to HcmWorker in either direction, so this is a field-value match only. The live path from a timesheet line is ProjEmplTrans.Resource → ResResourceIdentifier, gated on RefTableId.'
+          },
+          {
+            from: 'ProjEmplTrans',
             to: 'ResResourceIdentifier',
             badge: 'conditional FK — requires RefTableId = tableNum(HcmWorker)',
             note: 'ProjEmplTrans.Resource is a declared FK to ResResourceIdentifier.RecId, which is a generic (RefTableId, RefRecId) pointer; the worker is reached through the resource identifier only when RefTableId = tableNum(HcmWorker). There is no direct ProjEmplTrans → HcmWorker relation.',
@@ -1641,7 +1648,7 @@ export const flows: Flow[] = [
         title: 'Invoice (On-account/Progress)',
         description: 'Create and review invoice proposals; posting creates the customer invoice. Time-and-material billing selects eligible project transactions, while fixed-price billing uses on-account transactions or billing schedules. Revenue recognition is a separate process in the next stage.',
         roles: ['Project', 'AR'],
-        menuPaths: ['Project management and accounting > Periodic > Invoice'],
+        menuPaths: ['Project management and accounting > Periodic > Project invoices'],
         docs: [
           {
             title: 'Manage project invoice proposals',
@@ -5809,7 +5816,7 @@ export const tableDefs: Record<string, TableDef> = {
 
   HcmWorker: {
     name: "HcmWorker",
-    description: "Shared worker record for both employees (WorkerType=Employee) and contractors (WorkerType=Contractor). Identified by PersonnelNumber. Links to DirPerson for all personal/contact data stored in the Global Address Book.",
+    description: "Shared worker record for both employees and contractors. Identified by PersonnelNumber. Links to DirPerson for all personal/contact data stored in the Global Address Book. The employee-vs-contractor distinction is not a column on this table — it is modelled by the child tables HcmEmploymentEmployee and HcmEmploymentContractor, both linked through HcmEmployment.",
     module: "Human Resources",
     fields: [
       { name: "PersonnelNumber", type: "String(20)", note: "Natural key for the worker across the system" },
@@ -6913,7 +6920,7 @@ export const tableDefs: Record<string, TableDef> = {
     fields: [
       { name: "RecId", type: "int64", note: "Surrogate PK" },
       { name: "ProjID", type: "string", note: "FK → ProjTable; the project the milestone belongs to" },
-      { name: "ActivityNumber", type: "string", note: "FK → ProjWBSActivity (optional); WBS task the milestone aligns to" },
+      { name: "ActivityNumber", type: "string", note: "FK → smmActivities.ActivityNumber; WBS task the milestone aligns to" },
       { name: "Description", type: "string", note: "Milestone description shown on the invoice" },
       { name: "TotalSalesAmountCur", type: "decimal", note: "Billable amount for this milestone in transaction currency" },
       { name: "TransDate", type: "date", note: "Milestone billing date" },
