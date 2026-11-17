@@ -1535,9 +1535,9 @@ export const flows: Flow[] = [
       {
         id: 'proj-quote',
         title: 'Project Quotation',
-        description: 'Scope, pricing, and quote approvals.',
+        description: 'Scope and price the project quotation, complete its approval workflow, then confirm it from Periodic > Quotations and transfer some or all lines to a new or existing project; where needed, copy the quotation to a project forecast.',
         roles: ['Project', 'Sales'],
-        menuPaths: ['Project management and accounting > Quotes'],
+        menuPaths: ['Project management and accounting > Quotations'],
         docs: [
           {
             title: 'Project quotations',
@@ -1546,13 +1546,29 @@ export const flows: Flow[] = [
         ],
         pitfalls: ['Funding source not set', 'Category setup incomplete'],
         prerequisites: ['Project groups', 'Categories', 'Funding sources'],
-        tables: ['ProjTable', 'ProjQuotationTable', 'ProjGroup', 'ProjFundingSource'],
+        tables: ['ProjTable', 'SalesQuotationTable', 'ProjGroup', 'ProjFundingSource', 'ProjInvoiceTable'],
+        relations: [
+          {
+            from: 'SalesQuotationTable',
+            to: 'ProjTable',
+            fields: ['SalesQuotationTable.ProjIdRef = ProjTable.ProjId'],
+            badge: 'declared FK',
+            note: 'Project quotation references the project it was transferred to or created against.',
+          },
+          {
+            from: 'SalesQuotationTable',
+            to: 'ProjInvoiceTable',
+            fields: ['SalesQuotationTable.ProjInvoiceProjId = ProjInvoiceTable.ProjInvoiceProjId'],
+            badge: 'declared FK',
+            note: 'Project quotation references its project billing contract.',
+          },
+        ],
         approvals: ['Quote approval workflow']
       },
       {
         id: 'proj-contract',
         title: 'Project Contract & WBS',
-        description: 'Contracts, subprojects, WBS planning.',
+        description: 'Choose the project type and contract, define forecasts and budgets, then build and publish the WBS; project type determines downstream invoicing.',
         roles: ['Project'],
         menuPaths: ['Project management and accounting > Projects'],
         docs: [
@@ -1562,27 +1578,36 @@ export const flows: Flow[] = [
           }
         ],
         pitfalls: ['WBS not published', 'Funding rules incomplete'],
-        prerequisites: ['Project contract', 'Funding rules', 'WBS'],
-        tables: ['ProjTable', 'ProjInvoiceTable', 'ProjFundingSource', 'ProjWBSActivity', 'ProjWBSLineProperty'],
+        prerequisites: ['Project type', 'Project contract', 'Funding rules', 'Forecasts and budgets', 'WBS'],
+        tables: ['ProjTable', 'ProjInvoiceTable', 'ProjFundingSource', 'ProjPlanVersion', 'ProjPlanVersionDetail', 'ProjLineProperty'],
         relations: [
-          {
-            from: 'ProjWBSActivity',
-            to: 'ProjTable',
-            fields: ['ProjWBSActivity.ProjId = ProjTable.ProjId'],
-            note: 'WBS activities belong to project',
-          },
           {
             from: 'ProjFundingSource',
             to: 'ProjInvoiceTable',
             fields: ['ProjFundingSource.ContractId = ProjInvoiceTable.ProjInvoiceProjId'],
-            note: 'Funding rules are linked to the project billing contract (ProjInvoiceTable)',
+            badge: 'declared FK',
+            note: "Funding source ContractId is constrained to the project billing contract ProjInvoiceProjId.",
+          },
+          {
+            from: 'ProjPlanVersionDetail',
+            to: 'ProjTable',
+            fields: ['ProjPlanVersionDetail.ProjId = ProjTable.ProjId'],
+            badge: 'declared FK',
+            note: 'WBS plan-version detail associates the hierarchy with its project.',
+          },
+          {
+            from: 'ProjPlanVersionDetail',
+            to: 'ProjPlanVersion',
+            fields: ['ProjPlanVersionDetail.HierarchyId = ProjPlanVersion.HierarchyId'],
+            badge: 'declared FK',
+            note: 'Plain AxTableRelation field constraint (an association, not an AxTableRelationForeignKey): plan-version detail links to the task hierarchy in ProjPlanVersion.',
           },
         ],
       },
       {
         id: 'proj-exec',
         title: 'Execute & Track',
-        description: 'Timesheets, expenses, item consumption.',
+        description: 'Capture hours, expenses, and item consumption; complete required review, approval, and posting so project actuals are available for tracking and billing. Materials may flow through item requirements, purchase orders, and packing slips.',
         roles: ['Project'],
         menuPaths: ['Project management and accounting > Timesheets'],
         docs: [
@@ -1591,20 +1616,29 @@ export const flows: Flow[] = [
             url: 'https://learn.microsoft.com/dynamics365/project-operations/prod-pma/overview-project-management-accounting'
           }
         ],
-        pitfalls: ['Category validation failing', 'Resource not assigned'],
+        pitfalls: ['Category validation failing', 'Resource not assigned', 'Transactions not approved or posted'],
         prerequisites: ['Categories allowed on project', 'Worker setup'],
-        tables: ['ProjEmplTrans', 'ProjItemTrans', 'ProjCostTrans', 'HcmWorker', 'ProjCategory'],
+        tables: ['ProjEmplTrans', 'ProjItemTrans', 'ProjCostTrans', 'HcmWorker', 'ProjCategory', 'ResResourceIdentifier'],
         relations: [
           {
             from: 'ProjEmplTrans',
             to: 'HcmWorker',
-            note: 'Timesheets reference workers',
-            fields: ['ProjEmplTrans.Worker = HcmWorker.RecId']
+            fields: ['ProjEmplTrans.Worker = HcmWorker.RecId'],
+            badge: 'field match — not a declared FK',
+            note: 'Hidden deprecated column (EDT ProjWorkerRecId); no AOT relation to HcmWorker in either direction, so this is a field-value match only. The live path from a timesheet line is ProjEmplTrans.Resource → ResResourceIdentifier, gated on RefTableId.'
+          },
+          {
+            from: 'ProjEmplTrans',
+            to: 'ResResourceIdentifier',
+            badge: 'conditional FK — requires RefTableId = tableNum(HcmWorker)',
+            note: 'ProjEmplTrans.Resource is a declared FK to ResResourceIdentifier.RecId, which is a generic (RefTableId, RefRecId) pointer; the worker is reached through the resource identifier only when RefTableId = tableNum(HcmWorker). There is no direct ProjEmplTrans → HcmWorker relation.',
+            fields: ['ProjEmplTrans.Resource = ResResourceIdentifier.RecId']
           },
           {
             from: 'ProjEmplTrans',
             to: 'ProjTable',
-            note: 'Transactions posted to project',
+            badge: 'declared FK',
+            note: 'Posted employee transaction is associated with its project.',
             fields: ['ProjEmplTrans.ProjId = ProjTable.ProjId']
           }
         ]
@@ -1612,9 +1646,9 @@ export const flows: Flow[] = [
       {
         id: 'proj-invoice',
         title: 'Invoice (On-account/Progress)',
-        description: 'Create invoice proposals and post revenue.',
+        description: 'Create and review invoice proposals; posting creates the customer invoice. Time-and-material billing selects eligible project transactions, while fixed-price billing uses on-account transactions or billing schedules. Revenue recognition is a separate process in the next stage.',
         roles: ['Project', 'AR'],
-        menuPaths: ['Project management and accounting > Periodic > Invoice proposals'],
+        menuPaths: ['Project management and accounting > Periodic > Project invoices'],
         docs: [
           {
             title: 'Manage project invoice proposals',
@@ -1629,7 +1663,8 @@ export const flows: Flow[] = [
             from: 'ProjInvoiceJour',
             to: 'ProjInvoiceTable',
             fields: ['ProjInvoiceJour.ProjInvoiceProjId = ProjInvoiceTable.ProjInvoiceProjId'],
-            note: 'Posted project invoice header references the project billing contract',
+            badge: 'declared FK',
+            note: 'Posted project invoice journal references the project billing contract.',
           },
         ],
         approvals: ['Invoice approval workflow (optional)']
@@ -1637,7 +1672,7 @@ export const flows: Flow[] = [
       {
         id: 'proj-revrec',
         title: 'Revenue Recognition',
-        description: 'Recognize and post revenue/deferrals.',
+        description: "Use the project's cost-and-revenue profile and completion method to calculate and review revenue recognition, then post recognized revenue or deferrals. This is separate from invoice proposal posting.",
         roles: ['Controller'],
         menuPaths: ['Project management and accounting > Periodic > Revenue recognition'],
         docs: [
@@ -1646,21 +1681,23 @@ export const flows: Flow[] = [
             url: 'https://learn.microsoft.com/en-us/dynamics365/guidance/business-processes/project-to-profit-recognize-project-revenue'
           }
         ],
-        pitfalls: ['Schedule not set', 'Allocation method wrong'],
-        prerequisites: ['Revenue recognition schedule', 'Project group rules'],
+        pitfalls: ['Schedule not set', 'Allocation method wrong', 'Cost-and-revenue profile or completion method missing'],
+        prerequisites: ['Cost-and-revenue profile', 'Completion method', 'Revenue recognition schedule', 'Project group rules'],
         tables: ['ProjRevenueTrans', 'ProjCostTrans', 'SubledgerVoucherGeneralJournalEntry', 'ProjTable'],
         relations: [
           {
             from: 'ProjRevenueTrans',
             to: 'ProjTable',
-            note: 'Revenue posted per project',
+            badge: 'declared FK',
+            note: 'Revenue transaction is associated with its project.',
             fields: ['ProjRevenueTrans.ProjId = ProjTable.ProjId']
           },
           {
             from: 'ProjRevenueTrans',
             to: 'SubledgerVoucherGeneralJournalEntry',
-            note: 'Recognition posts to the ledger; the project voucher is matched on the subledger/GL bridge row, which resolves to the GeneralJournalEntry header',
-            fields: ['ProjRevenueTrans.VoucherJournal → SubledgerVoucherGeneralJournalEntry.Voucher']
+            badge: 'field match — not a declared FK',
+            note: 'Voucher-field match only; standard metadata has no AOT relation in either direction.',
+            fields: ['ProjRevenueTrans.VoucherJournal = SubledgerVoucherGeneralJournalEntry.Voucher']
           }
         ]
       }
@@ -2443,6 +2480,16 @@ export const tableDefs: Record<string, TableDef> = {
         type: "String",
         fkTarget: "Currency",
         note: "Transaction currency for all amounts on this quotation.",
+      },
+      {
+        name: "ProjIdRef",
+        type: "String",
+        note: "EDT ProjId; project reference on a project quotation.",
+      },
+      {
+        name: "ProjInvoiceProjId",
+        type: "String",
+        note: "EDT ProjInvoiceProjId; project billing-contract reference.",
       },
     ],
   },
@@ -5769,15 +5816,11 @@ export const tableDefs: Record<string, TableDef> = {
 
   HcmWorker: {
     name: "HcmWorker",
-    description: "Shared worker record for both employees (WorkerType=Employee) and contractors (WorkerType=Contractor). Identified by PersonnelNumber. Links to DirPerson for all personal/contact data stored in the Global Address Book.",
+    description: "Shared worker record for both employees and contractors. Identified by PersonnelNumber. Links to DirPerson for all personal/contact data stored in the Global Address Book. The employee-vs-contractor distinction is not a column on this table — it is modelled by the child tables HcmEmploymentEmployee and HcmEmploymentContractor, both linked through HcmEmployment.",
     module: "Human Resources",
-    docsUrl: "https://learn.microsoft.com/common-data-model/schema/core/operationscommon/entities/humanresources/hrm/hcmworkerentity",
     fields: [
       { name: "PersonnelNumber", type: "String(20)", note: "Natural key for the worker across the system" },
-      { name: "WorkerType", type: "Enum", note: "Employee or Contractor" },
       { name: "Person", type: "Int64", note: "FK → DirPerson.RecId; links to the GAB party record for personal data" },
-      { name: "AllowRehire", type: "Enum", note: "Yes / No / Under conditions; set on separation" },
-      { name: "ObjectId", type: "String(36)", note: "GUID-style unique identifier used in API / Dataverse integration" },
     ],
   },
 
@@ -6648,24 +6691,6 @@ export const tableDefs: Record<string, TableDef> = {
     ],
   },
 
-  ProjQuotationTable: {
-    name: "ProjQuotationTable",
-    description: "Project quotation header — a sales quotation issued for project-based work. Captures the customer, estimated revenue, probability of winning, and links to the billing contract (ProjInvoiceId). When won, the quotation is confirmed into a project contract and project. Equivalent to a project-type SalesQuotationTable.",
-    module: "Project Management and Accounting",
-    docsUrl: "https://learn.microsoft.com/dynamics365/finance/project-management/project-quotations",
-    fields: [
-      { name: "RecId", type: "Int64", note: "Surrogate primary key" },
-      { name: "QuotationId", type: "String", note: "Natural key — unique quotation identifier" },
-      { name: "CustAccount", type: "String", fkTarget: "CustTable.AccountNum", note: "FK to the customer the quotation is issued to" },
-      { name: "ProjInvoiceId", type: "String", fkTarget: "ProjContract.ProjInvoiceId", note: "FK to the billing contract this quotation is linked to; nullable before contract creation" },
-      { name: "QuotationDate", type: "Date", note: "Date the quotation was created" },
-      { name: "ExpiryDate", type: "Date", note: "Date after which the quotation expires" },
-      { name: "Probability", type: "Decimal", note: "Probability of winning expressed as a percentage (0–100)" },
-      { name: "Status", type: "Enum", note: "0=Created, 1=Sent, 2=Confirmed (won), 3=Lost, 4=Cancelled" },
-      { name: "TotalAmount", type: "Decimal", note: "Estimated total contract value of the quotation" },
-    ],
-  },
-
   ProjGroup: {
     name: "ProjGroup",
     description: "Project group — a configuration master that determines how transactions are posted to the general ledger (P&L vs WIP balance sheet), revenue accrual method, and matching principle for fixed-price projects.",
@@ -6690,7 +6715,7 @@ export const tableDefs: Record<string, TableDef> = {
     docsUrl: "https://learn.microsoft.com/en-us/common-data-model/schema/core/operationscommon/tables/professionalservices/projectmanagementandaccounting/main/projfundingsource",
     fields: [
       { name: "FundingSourceId", type: "string", note: "Natural key — funding source identifier within the contract" },
-      { name: "ContractId", type: "string", note: "FK → ProjInvoiceTable.ProjInvoiceId (the billing contract)" },
+      { name: "ContractId", type: "string", note: "FK → ProjInvoiceTable.ProjInvoiceProjId (the billing contract)" },
       { name: "CustAccount", type: "string", note: "FK → CustTable; customer account if FundingType = Customer" },
       { name: "FundingType", type: "int32", note: "Enum: Customer, Grant, Organisation" },
       { name: "Party", type: "int64", note: "FK → DirPartyTable; generic party link for non-customer funders" },
@@ -6715,34 +6740,80 @@ export const tableDefs: Record<string, TableDef> = {
     ],
   },
 
-  ProjWBSActivity: {
-    name: "ProjWBSActivity",
-    description: "Work breakdown structure activity — represents a task node in the project plan hierarchy. Stores scheduling, effort estimates, and resource assignments. Parent–child relationships form the WBS tree; estimate lines (ProjWBSActivityEstimatesEntity) attach hour/expense forecasts to each activity.",
+  ProjPlanVersion: {
+    name: "ProjPlanVersion",
+    description: "Project WBS task hierarchy containing task identifiers, schedule, effort, cost and revenue estimates, and task status.",
     module: "Project Management and Accounting",
-    docsUrl: "https://learn.microsoft.com/en-us/common-data-model/schema/core/operationscommon/entities/professionalservices/projectmanagementandaccounting/projwbsactivityestimatesentity",
     fields: [
-      { name: "ActivityNumber", type: "string", note: "Natural key — unique activity/task identifier within the project" },
-      { name: "ProjId", type: "string", note: "FK → ProjTable; the owning project" },
-      { name: "Name", type: "string", note: "Activity name / task title" },
-      { name: "ParentActivityNumber", type: "string", note: "FK → ProjWBSActivity.ActivityNumber (null = root node); defines tree hierarchy" },
-      { name: "ScheduledStartDate", type: "date", note: "Planned start date of the activity" },
-      { name: "ScheduledEndDate", type: "date", note: "Planned end date / completion date" },
-      { name: "EstimatedEffort", type: "decimal", note: "Planned effort in hours for this task node" },
+      { name: "ActivityTaskTimeType", type: "Enum", note: "Enum smmActivityTaskTimeType" },
+      { name: "EndNode", type: "Enum", note: "Enum FalseTrue" },
+      { name: "HierarchyId", type: "String", note: "EDT HierarchyIdBase" },
+      { name: "HierarchyLevel", type: "Int", note: "EDT ProjHierarchyLevel" },
+      { name: "HierarchyTaskId", type: "Int64", note: "EDT ProjHierarchyTaskId" },
+      { name: "HierarchyTreeTableRefRecId", type: "Int64", note: "EDT RefRecId" },
+      { name: "IsCategoryMandatory", type: "Enum", note: "Enum NoYes" },
+      { name: "IsTaskClosed", type: "Enum", note: "Enum NoYes" },
+      { name: "IsTaskMandatory", type: "Enum", note: "Enum NoYes" },
+      { name: "MSPID", type: "Guid", note: "No EDT/enum recorded" },
+      { name: "NumberOfResources", type: "Real", note: "EDT NumberOfResources" },
+      { name: "ParentHierarchyTaskId", type: "Int64", note: "No EDT recorded" },
+      { name: "PathId", type: "String", note: "EDT ProjHierarchyPathId" },
+      { name: "ResourceCategory", type: "Int64", note: "EDT ResourceCategoryRecId" },
+      { name: "TaskAssignedHours", type: "Real", note: "EDT Hours" },
+      { name: "TaskCategory", type: "String", note: "EDT ProjCategoryId" },
+      { name: "TaskCostAtComplete", type: "Real", note: "EDT ProjTotalCostAmount" },
+      { name: "TaskDuration", type: "Real", note: "EDT DaysAsReal" },
+      { name: "TaskEffort", type: "Real", note: "EDT Hours" },
+      { name: "TaskEffortAtComplete", type: "Real", note: "EDT Hours" },
+      { name: "TaskEffortToComplete", type: "Real", note: "EDT Hours" },
+      { name: "TaskFinishDate", type: "Date", note: "EDT SchedToDate" },
+      { name: "TaskName", type: "String", note: "EDT ProjTaskName" },
+      { name: "TaskPriority", type: "Enum", note: "Enum smmActivityPriority" },
+      { name: "TaskProjectedCost", type: "Real", note: "EDT AmountMST" },
+      { name: "TaskProjectedEndDate", type: "Date", note: "EDT SchedToDate" },
+      { name: "TaskProjectedRevenue", type: "Real", note: "EDT AmountMST" },
+      { name: "TaskSchedulingStatus", type: "Enum", note: "Enum PSAScheduled" },
+      { name: "TaskSiblingNumber", type: "Real", note: "EDT LineNum" },
+      { name: "TaskStartDate", type: "Date", note: "EDT SchedFromDate" },
+      { name: "TaskStatus", type: "Enum", note: "Enum smmActivityTaskTimeType" },
+      { name: "UserMemo", type: "String", note: "EDT smmActivityUserMemo" },
     ],
   },
 
-  ProjWBSLineProperty: {
-    name: "ProjWBSLineProperty",
-    description: "WBS line property — configuration master that controls how a WBS activity's transactions are recognised for cost and revenue. Specifies chargeable/non-chargeable status, billing rule, and whether hours/expenses posted against this line property accrue to WIP or flow directly to P&L.",
+  ProjPlanVersionDetail: {
+    name: "ProjPlanVersionDetail",
+    description: "Project WBS plan-version detail linking project and hierarchy identifiers to a plan version.",
     module: "Project Management and Accounting",
-    docsUrl: "https://learn.microsoft.com/en-us/dynamics365/project-operations/project-accounting/configure-project-categories",
     fields: [
-      { name: "RecId", type: "Int64", note: "Surrogate primary key" },
-      { name: "LinePropertyId", type: "String", note: "Natural key — line property identifier (e.g. 'Chargeable', 'Non-chargeable', 'Complementary')" },
-      { name: "Description", type: "String", note: "Human-readable description of the line property" },
-      { name: "LinePropertyType", type: "Enum", note: "0=Chargeable, 1=NonChargeable, 2=Complementary, 3=NotAvailable — controls billing and WIP treatment" },
-      { name: "IncludeInInvoice", type: "Enum", note: "Whether transactions with this line property appear on the project invoice" },
-      { name: "AccrueRevenue", type: "Enum", note: "Whether revenue is accrued to WIP for this line property type" },
+      { name: "Description", type: "String", note: "EDT Description" },
+      { name: "HierarchyId", type: "String", note: "EDT HierarchyIdBase" },
+      { name: "IsActiveBaseline", type: "Enum", note: "Enum NoYes" },
+      { name: "IsBaseline", type: "Enum", note: "Enum NoYes" },
+      { name: "IsTemplate", type: "Enum", note: "EDT smmActivityIsTemplate; enum NoYes" },
+      { name: "ProjId", type: "String", note: "EDT ProjId" },
+      { name: "VersionId", type: "Real", note: "EDT ProjVersionId" },
+      { name: "VersionName", type: "String", note: "EDT Name" },
+      { name: "VersionType", type: "Enum", note: "Enum ProjPlanVersionType" },
+    ],
+  },
+
+  ProjLineProperty: {
+    name: "ProjLineProperty",
+    description: "Project line property setup controlling whether project transactions are billable, invoiced, accrued, or capitalized.",
+    module: "Project Management and Accounting",
+    fields: [
+      { name: "CostMarkup", type: "Real", note: "EDT ProjMarkupPct" },
+      { name: "LinePropertyId", type: "String", note: "EDT ProjLinePropertyId" },
+      { name: "Name", type: "String", note: "EDT ProjLinePropertyName" },
+      { name: "NormBillable", type: "Enum", note: "Enum NoYes" },
+      { name: "NormEfficiency", type: "Enum", note: "Enum NoYes" },
+      { name: "OnInvoice", type: "Enum", note: "EDT ProjInvoiceZeroSalesPrice; enum NoYes" },
+      { name: "OnQuotation", type: "Enum", note: "EDT ProjQuotationZeroSalesPrice; enum NoYes" },
+      { name: "SalesMarkup", type: "Real", note: "EDT ProjMarkupPct" },
+      { name: "ToBeAccrued", type: "Enum", note: "EDT ProjAccruable; enum boolean" },
+      { name: "ToBeCapitalize", type: "Enum", note: "EDT ProjCapitalize; enum boolean" },
+      { name: "ToBeInvoiced", type: "Enum", note: "Enum NoYes" },
+      { name: "isEfficiency", type: "Enum", note: "Enum NoYes" },
     ],
   },
 
@@ -6817,7 +6888,7 @@ export const tableDefs: Record<string, TableDef> = {
     name: "ProjInvoiceTable",
     description: "Project billing contract header (shown as Project contracts in the D365FO UI). Defines payment terms, currency, posting profile, and invoice format for one or more projects. ProjTable.ProjInvoiceProjId is the FK into this table.",
     module: "Project Management and Accounting",
-    docsUrl: "https://learn.microsoft.com/en-us/common-data-model/schema/core/operationscommon/tables/professionalservices/projectmanagementandaccounting/transaction/projinvoicejour",
+    docsUrl: "https://learn.microsoft.com/en-us/common-data-model/schema/core/operationscommon/tables/professionalservices/projectmanagementandaccounting/main/projinvoicetable",
     fields: [
       { name: "ProjInvoiceProjId", type: "string", note: "FK → ProjInvoiceTable (billing contract) under which this invoice was created" },
       { name: "CurrencyId", type: "string", note: "Invoice currency" },
@@ -6849,7 +6920,7 @@ export const tableDefs: Record<string, TableDef> = {
     fields: [
       { name: "RecId", type: "int64", note: "Surrogate PK" },
       { name: "ProjID", type: "string", note: "FK → ProjTable; the project the milestone belongs to" },
-      { name: "ActivityNumber", type: "string", note: "FK → ProjWBSActivity (optional); WBS task the milestone aligns to" },
+      { name: "ActivityNumber", type: "string", note: "FK → smmActivities.ActivityNumber; WBS task the milestone aligns to" },
       { name: "Description", type: "string", note: "Milestone description shown on the invoice" },
       { name: "TotalSalesAmountCur", type: "decimal", note: "Billable amount for this milestone in transaction currency" },
       { name: "TransDate", type: "date", note: "Milestone billing date" },
