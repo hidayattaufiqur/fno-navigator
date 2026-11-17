@@ -1992,166 +1992,374 @@ export const flows: Flow[] = [
   {
     id: 'hr',
     title: 'Hire to Retire',
-    summary: 'Onboard workers, manage compensation, and exit.',
+    summary: 'Set up workers and positions, run onboarding processes, administer compensation, benefits and leave/absence, and manage offboarding when employment ends.',
     module: 'HR',
     stages: [
       {
         id: 'positions',
-        title: 'Positions & Workers',
-        description: 'Create positions, assign workers, and employment.',
+        title: 'Workers & Positions',
+        description: 'Maintain worker and employment records, establish position hierarchies, and assign workers to positions through the assignment record.',
         roles: ['HR'],
-        menuPaths: ['Human resources > Workers'],
+        menuPaths: ['Human resources > Workers > HcmWorkerListPage_Workers'],
         docs: [
           {
             title: 'Positions — Dynamics 365 Human Resources',
             url: 'https://learn.microsoft.com/dynamics365/human-resources/hr-personnel-positions'
           }
         ],
-        pitfalls: ['Position hierarchies broken', 'Personnel actions not enabled'],
-        prerequisites: ['Departments, jobs, positions'],
-        tables: ['HcmWorker', 'HcmPosition', 'HcmEmployment', 'DirPerson', 'HcmPositionHierarchy'],
+        pitfalls: [
+          'Looking for a worker column on HcmPosition — it has none; the link is the HcmPositionWorkerAssignment record',
+          'Employee/contractor distinction treated as a field on HcmEmployment instead of the HcmEmploymentEmployee and HcmEmploymentContractor subtypes'
+        ],
+        prerequisites: ['Worker/person setup', 'Employing legal entity', 'Position hierarchy setup'],
+        tables: ['HcmWorker', 'HcmPosition', 'HcmEmployment', 'HcmPositionHierarchy', 'HcmPositionWorkerAssignment', 'HcmEmploymentEmployee', 'HcmEmploymentContractor'],
         relations: [
           {
             from: 'HcmEmployment',
             to: 'HcmWorker',
-            note: 'Employment records per worker',
+            badge: 'declared FK',
+            note: 'Declared relation; relationship_type is Aggregation.',
             fields: ['HcmEmployment.Worker = HcmWorker.RecId']
+          },
+          {
+            from: 'HcmEmployment',
+            to: 'CompanyInfo',
+            badge: 'declared FK',
+            note: 'Declared relation; relationship_type is Aggregation. Endpoint table only — no chip.',
+            fields: ['HcmEmployment.LegalEntity = CompanyInfo.RecId']
+          },
+          {
+            from: 'HcmWorker',
+            to: 'DirPerson',
+            badge: 'declared FK',
+            note: 'Declared relation; relationship_type is Aggregation.',
+            fields: ['HcmWorker.Person = DirPerson.RecId']
+          },
+          {
+            from: 'HcmPositionWorkerAssignment',
+            to: 'HcmPosition',
+            badge: 'declared FK',
+            note: 'Declared relation; relationship_type is Aggregation. The position-worker bridge — HcmPosition itself has no declared relation to HcmWorker.',
+            fields: ['HcmPositionWorkerAssignment.Position = HcmPosition.RecId']
+          },
+          {
+            from: 'HcmPositionWorkerAssignment',
+            to: 'HcmWorker',
+            badge: 'declared FK',
+            note: 'Declared relation; relationship_type is Aggregation.',
+            fields: ['HcmPositionWorkerAssignment.Worker = HcmWorker.RecId']
           },
           {
             from: 'HcmPositionHierarchy',
             to: 'HcmPosition',
-            note: 'Positions tied into hierarchy',
-            fields: ['HcmPositionHierarchy.PositionId = HcmPosition.RecId']
+            badge: 'declared FK',
+            note: 'Declared relation; relationship_type is Aggregation. Child position edge.',
+            fields: ['HcmPositionHierarchy.Position = HcmPosition.RecId']
+          },
+          {
+            from: 'HcmPositionHierarchy',
+            to: 'HcmPosition',
+            badge: 'declared FK',
+            note: 'Declared relation; relationship_type is Association. Parent position edge — distinct from the Position edge.',
+            fields: ['HcmPositionHierarchy.ParentPosition = HcmPosition.RecId']
+          },
+          {
+            from: 'HcmPositionHierarchy',
+            to: 'HcmPositionHierarchyType',
+            badge: 'declared FK',
+            note: 'Declared relation; relationship_type is Aggregation. Endpoint table only — no chip.',
+            fields: ['HcmPositionHierarchy.PositionHierarchyType = HcmPositionHierarchyType.RecId']
+          },
+          {
+            from: 'HcmEmploymentEmployee',
+            to: 'HcmEmployment',
+            badge: 'declared FK',
+            note: 'Declared relation; relationship_type is Aggregation. Employee subtype, not a WorkerType value.',
+            fields: ['HcmEmploymentEmployee.Employment = HcmEmployment.RecId']
+          },
+          {
+            from: 'HcmEmploymentContractor',
+            to: 'HcmEmployment',
+            badge: 'declared FK',
+            note: 'Declared relation; relationship_type is Aggregation. Contractor subtype, not a WorkerType value.',
+            fields: ['HcmEmploymentContractor.Employment = HcmEmployment.RecId']
           }
         ]
       },
       {
         id: 'onboard',
-        title: 'Onboard',
-        description: 'Tasks, documents, and access.',
-        roles: ['HR', 'IT'],
-        menuPaths: ['Human resources > Workers > Onboarding'],
+        title: 'Onboarding Processes',
+        description: 'Configure onboarding process templates and task configuration; execute onboarding as a process, not as a generic checklist table.',
+        roles: ['HR'],
+        menuPaths: [
+          'Human resources > Onboarding > HcmOnboardProcessTemplateListPage (business-process template, not a worker form)',
+          'Human resources > Onboarding > HcmOnboardTaskConfiguration'
+        ],
         docs: [
           {
             title: 'Task management (onboarding, offboarding, transitions)',
             url: 'https://learn.microsoft.com/dynamics365/human-resources/hr-task-mgmt'
           }
         ],
-        pitfalls: ['Missing delegation', 'Security roles not assigned'],
-        prerequisites: ['Checklists', 'Security roles'],
-        tables: ['HcmOnboardingTask', 'HcmChecklist', 'SecurityUserRole', 'HcmWorker'],
+        pitfalls: [
+          'Expecting a generic checklist table or a worker security-role table — there is none; tasks are onboarding process tasks',
+          'Treating access provisioning as an HR table relation instead of a separate IT action'
+        ],
+        prerequisites: ['Applicable onboarding process template configured'],
+        tables: ['HcmOnboardProcessHeader', 'HcmOnboardProcessTask', 'HcmOnboardLibraryTask', 'HcmOnboardTemplateTask', 'HcmOnboardTemplateAgentTasks'],
         relations: [
           {
-            from: 'HcmChecklist',
-            to: 'HcmWorker',
-            note: 'Assigned onboarding tasks to worker',
-            fields: ['HcmChecklist.Worker = HcmWorker.RecId']
+            from: 'HcmOnboardProcessHeader',
+            to: 'BusinessProcessHeader',
+            badge: 'declared FK',
+            note: 'Declared relation; relationship_type is Composition. Endpoint table only — no chip.',
+            fields: ['HcmOnboardProcessHeader.ProcessHeader = BusinessProcessHeader.RecId']
           },
           {
-            from: 'SecurityUserRole',
+            from: 'HcmOnboardProcessHeader',
+            to: 'HcmEmployment',
+            badge: 'declared FK',
+            note: 'Declared relation; relationship_type is Association.',
+            fields: ['HcmOnboardProcessHeader.Employment = HcmEmployment.RecId']
+          },
+          {
+            from: 'HcmOnboardProcessHeader',
             to: 'HcmWorker',
-            note: 'Roles assigned to worker\'s user',
-            fields: ['SecurityUserRole.UserId linked to worker user']
+            badge: 'declared FK',
+            note: 'Declared relation; relationship_type is Association.',
+            fields: ['HcmOnboardProcessHeader.OnboardedEmployee = HcmWorker.RecId']
+          },
+          {
+            from: 'HcmOnboardProcessTask',
+            to: 'HcmPosition',
+            badge: 'declared FK',
+            note: 'Declared relation; relationship_type is Association.',
+            fields: ['HcmOnboardProcessTask.AssignedPosition = HcmPosition.RecId']
+          },
+          {
+            from: 'HcmOnboardProcessTask',
+            to: 'BusinessProcessTask',
+            badge: 'declared FK',
+            note: 'Declared relation; relationship_type is Composition. Endpoint table only — no chip.',
+            fields: ['HcmOnboardProcessTask.Task = BusinessProcessTask.RecId']
+          },
+          {
+            from: 'HcmOnboardLibraryTask',
+            to: 'HcmPosition',
+            badge: 'declared FK',
+            note: 'Declared relation; relationship_type is Association.',
+            fields: ['HcmOnboardLibraryTask.AssignedPosition = HcmPosition.RecId']
+          },
+          {
+            from: 'HcmOnboardLibraryTask',
+            to: 'BusinessProcessLibraryTask',
+            badge: 'declared FK',
+            note: 'Declared relation; relationship_type is Composition. Endpoint table only — no chip.',
+            fields: ['HcmOnboardLibraryTask.LibraryTask = BusinessProcessLibraryTask.RecId']
+          },
+          {
+            from: 'HcmOnboardTemplateTask',
+            to: 'HcmPosition',
+            badge: 'declared FK',
+            note: 'Declared relation; relationship_type is Association.',
+            fields: ['HcmOnboardTemplateTask.AssignedPosition = HcmPosition.RecId']
+          },
+          {
+            from: 'HcmOnboardTemplateTask',
+            to: 'BusinessProcessTemplateTask',
+            badge: 'declared FK',
+            note: 'Declared relation; relationship_type is Composition. Endpoint table only — no chip.',
+            fields: ['HcmOnboardTemplateTask.TemplateTask = BusinessProcessTemplateTask.RecId']
+          },
+          {
+            from: 'HcmOnboardTemplateAgentTasks',
+            to: 'BusinessProcessTemplateHeader',
+            badge: 'declared FK',
+            note: 'Declared relation; relationship_type is Composition. Endpoint table only — no chip.',
+            fields: ['HcmOnboardTemplateAgentTasks.TemplateHeader = BusinessProcessTemplateHeader.RecId']
           }
-        ]
+        ],
+        optional: true
       },
       {
-        id: 'comp',
-        title: 'Compensation & Benefits',
-        description: 'Plans, eligibility, enrollment.',
+        id: 'compensation',
+        title: 'Compensation',
+        description: 'Administer fixed and variable compensation plans, eligibility, and compensation events/processes; this is separate from benefit enrollment.',
         roles: ['HR'],
-        menuPaths: ['Human resources > Compensation management'],
+        menuPaths: [
+          'Human resources > Compensation > Fixed compensation > HcmCompensationLevel',
+          'Human resources > Compensation > Variable compensation > HRMCompVarPlanTable',
+          'Human resources > Compensation > Eligibility (compensation) > HRMCompEligibility',
+          'Human resources > Compensation > Process (compensation) > HRMCompEvent'
+        ],
         docs: [
           {
             title: 'Compensation plans overview',
             url: 'https://learn.microsoft.com/dynamics365/human-resources/hr-compensation-overview'
           }
         ],
-        pitfalls: ['Eligibility rules wrong', 'Plan periods not active'],
-        prerequisites: ['Comp plans', 'Benefit plans', 'Eligibility rules'],
-        tables: ['HcmCompPlan', 'HcmCompFixedPlan', 'HcmBenefitPlan', 'HcmEligibilityRule', 'HcmWorker'],
+        pitfalls: [
+          'Using a compensation *Staging table as a business record — the business tables are the HRMComp* ones',
+          'Merging plan administration with benefit enrollment; they are separate processes with separate eligibility'
+        ],
+        prerequisites: ['Relevant compensation plan and eligibility/event configuration'],
+        tables: ['HRMCompFixedPlanTable', 'HRMCompVarPlanTable', 'HRMCompEligibility', 'HRMCompEvent', 'HRMCompProcess', 'HcmCompensationLevel'],
         relations: [
           {
-            from: 'HcmCompFixedPlan',
-            to: 'HcmWorker',
-            note: 'Worker enrolled in comp plan',
-            fields: ['HcmCompFixedPlan.Worker = HcmWorker.RecId']
-          },
-          {
-            from: 'HcmBenefitPlan',
-            to: 'HcmEligibilityRule',
-            note: 'Eligibility rules applied to benefit plan',
-            fields: ['Eligibility rules per benefit plan config']
+            from: 'HRMCompEvent',
+            to: 'HRMCompProcess',
+            badge: 'declared FK',
+            note: 'Declared relation; relationship_type is Aggregation.',
+            fields: ['HRMCompEvent.ProcessId = HRMCompProcess.ProcessId']
           }
-        ]
+        ],
+        optional: true
       },
       {
-        id: 'absence',
-        title: 'Leave / Absence',
-        description: 'Accruals, requests, approvals.',
+        id: 'benefits',
+        title: 'Benefits',
+        description: 'Configure benefit plans, types, options and eligibility, and manage worker benefit records.',
         roles: ['HR'],
-        menuPaths: ['Human resources > Leave and absence'],
+        menuPaths: ['Unverified — benefits menu path not resolved'],
+        docs: [
+          {
+            title: 'Configure benefit plans',
+            url: 'https://learn.microsoft.com/dynamics365/human-resources/hr-benefits-plans-setup'
+          }
+        ],
+        pitfalls: [
+          'Benefits navigation is unverified — do not follow an assumed menu path',
+          'Treating benefit eligibility as the same mechanism as compensation eligibility'
+        ],
+        prerequisites: ['Benefit plan/type/option and eligibility setup'],
+        tables: ['HcmBenefit', 'HcmBenefitPlan', 'HcmBenefitType', 'HcmBenefitOption', 'HcmBenefitEligibilityRule', 'HcmBenefitEligibility'],
+        relations: [
+          {
+            from: 'HcmBenefit',
+            to: 'HcmBenefitOption',
+            badge: 'declared FK',
+            note: 'Declared relation; relationship_type is Aggregation.',
+            fields: ['HcmBenefit.BenefitOption = HcmBenefitOption.RecId']
+          },
+          {
+            from: 'HcmBenefit',
+            to: 'HcmBenefitPlan',
+            badge: 'declared FK',
+            note: 'Declared relation; relationship_type is Aggregation.',
+            fields: ['HcmBenefit.BenefitPlan = HcmBenefitPlan.RecId']
+          },
+          {
+            from: 'HcmBenefitEligibilityRule',
+            to: 'ExpressionTable',
+            badge: 'declared FK',
+            note: 'Declared relation; relationship_type is Association. Endpoint table only — no chip.',
+            fields: ['HcmBenefitEligibilityRule.ExpressionTable = ExpressionTable.RecId']
+          },
+          {
+            from: 'HcmBenefitEligibilityRule',
+            to: 'SysPolicyRule',
+            badge: 'declared FK',
+            note: 'Declared relation; relationship_type is Specialization. Endpoint table only — no chip.',
+            fields: ['HcmBenefitEligibilityRule.RecId = SysPolicyRule.RecId']
+          }
+        ],
+        optional: true
+      },
+      {
+        id: 'leave',
+        title: 'Leave & Absence',
+        description: 'Manage leave types and the confirmed employment leave/vacation records as an ongoing employment process.',
+        roles: ['HR'],
+        menuPaths: [
+          'Human resources > Workers > Leave > HcmEmploymentLeaveListPage',
+          'Human resources > Workers > Leave > HcmLeaveType',
+          'Human resources > Absence > HRMAbsenceCode'
+        ],
         docs: [
           {
             title: 'Configure leave and absence types',
             url: 'https://learn.microsoft.com/dynamics365/human-resources/hr-leave-and-absence-types'
           }
         ],
-        pitfalls: ['Accrual schedule not run', 'Approval workflow missing'],
-        prerequisites: ['Leave types', 'Accrual schedules'],
-        tables: ['HcmLeaveType', 'HcmLeaveBank', 'HcmLeaveRequest', 'HcmLeaveAccrualSchedule'],
+        pitfalls: [
+          'Describing leave requests, balances or accrual schedules as confirmed tables — that persistence is unprobed',
+          'Assuming an approval workflow table chain that this flow does not document'
+        ],
+        prerequisites: ['Leave type and employment leave/vacation setup'],
+        tables: ['HcmLeaveType', 'HcmEmploymentLeave', 'HcmEmploymentVacation'],
         relations: [
           {
-            from: 'HcmLeaveRequest',
-            to: 'HcmLeaveBank',
-            note: 'Requests consume leave balances',
-            fields: ['HcmLeaveRequest.BankId = HcmLeaveBank.BankId']
+            from: 'HcmEmploymentLeave',
+            to: 'HcmEmployment',
+            badge: 'declared FK',
+            note: 'Declared relation; relationship_type is Aggregation.',
+            fields: ['HcmEmploymentLeave.Employment = HcmEmployment.RecId']
           },
           {
-            from: 'HcmLeaveAccrualSchedule',
-            to: 'HcmLeaveBank',
-            note: 'Accruals feed balance',
-            fields: ['HcmLeaveAccrualSchedule.BankId = HcmLeaveBank.BankId']
+            from: 'HcmEmploymentLeave',
+            to: 'HcmLeaveType',
+            badge: 'declared FK',
+            note: 'Declared relation; relationship_type is Aggregation.',
+            fields: ['HcmEmploymentLeave.LeaveType = HcmLeaveType.RecId']
+          },
+          {
+            from: 'HcmEmploymentVacation',
+            to: 'HcmEmployment',
+            badge: 'declared FK',
+            note: 'Declared relation; relationship_type is Aggregation.',
+            fields: ['HcmEmploymentVacation.Employment = HcmEmployment.RecId']
           }
         ],
-        approvals: ['Leave approval workflow']
+        optional: true
       },
       {
         id: 'offboard',
-        title: 'Offboard',
-        description: 'Terminate, final pay, and revoke access.',
+        title: 'Offboarding',
+        description: 'When employment ends, record the employment term and use the offboarding business-process template; this is a conditional terminal branch.',
         roles: ['HR', 'IT'],
-        menuPaths: ['Human resources > Workers > Terminate'],
+        menuPaths: [
+          'Human resources > Offboarding > HcmOffboardProcessTemplateListPage (business-process template; there is no Terminate menu item)',
+          'Human resources > Offboarding > HcmOffboardTaskConfiguration',
+          'Human resources > Transitions > HcmTransitionProcessTemplateListPage'
+        ],
         docs: [
           {
             title: 'Overview of the Terminate workers business process',
             url: 'https://learn.microsoft.com/dynamics365/guidance/business-processes/hire-to-retire-onboard-terminate-employment'
           }
         ],
-        pitfalls: ['Benefits not ended', 'Security not revoked'],
-        prerequisites: ['Offboarding checklist', 'Final pay rules'],
-        tables: ['HcmEmployment', 'HcmSeparation', 'HcmChecklist', 'SecurityUserRole'],
+        pitfalls: [
+          'Looking for a Terminate menu item — no such menu item was found; offboarding runs through the business-process template',
+          'Expecting HcmEmploymentTerm to establish final pay — it does not',
+          'Treating security removal as a worker/security table relation; it is a separate IT action'
+        ],
+        prerequisites: ['Termination decision/effective date', 'Applicable offboarding process template configured'],
+        tables: ['HcmEmployment', 'HcmEmploymentTerm'],
         relations: [
           {
-            from: 'HcmSeparation',
+            from: 'HcmEmploymentTerm',
             to: 'HcmEmployment',
-            note: 'Termination closes employment',
-            fields: ['HcmSeparation.Employment = HcmEmployment.RecId']
+            badge: 'declared FK',
+            note: 'Declared relation; relationship_type is Aggregation.',
+            fields: ['HcmEmploymentTerm.Employment = HcmEmployment.RecId']
           },
           {
-            from: 'SecurityUserRole',
-            to: 'HcmWorker',
-            note: 'Roles removed at termination',
-            fields: ['SecurityUserRole.UserId linked to worker user']
+            from: 'HcmEmploymentTerm',
+            to: 'HcmAgreementTerm',
+            badge: 'declared FK',
+            note: 'Declared relation; relationship_type is Aggregation. Endpoint table only — no chip.',
+            fields: ['HcmEmploymentTerm.AgreementTerm = HcmAgreementTerm.RecId']
           }
-        ]
+        ],
+        optional: true
       }
     ],
     edges: [
       { from: 'positions', to: 'onboard' },
-      { from: 'onboard', to: 'comp' },
-      { from: 'comp', to: 'absence' },
-      { from: 'absence', to: 'offboard' }
+      { from: 'positions', to: 'compensation' },
+      { from: 'positions', to: 'benefits' },
+      { from: 'positions', to: 'leave' },
+      { from: 'positions', to: 'offboard' }
     ]
   },
   {
@@ -5884,35 +6092,26 @@ export const tableDefs: Record<string, TableDef> = {
   },
 
   // ── HR tables ──────────────────────────────
+  // ── HR tables ──────────────────────────────
   HcmPosition: {
     name: "HcmPosition",
-    description: "Individual position instance within an organization — a specific funded slot tied to a Job. Defines the role, department assignment, reporting structure, activation/retirement dates, and compensation region. A position can have at most one active worker assignment at any time.",
+    description: "Individual position instance — one funded slot in the organization structure. Carries only the position identifier; the worker link is not a column on this table, it is the HcmPositionWorkerAssignment record, and hierarchy relationships are HcmPositionHierarchy rows.",
     module: "Human Resources",
-    docsUrl: "https://learn.microsoft.com/common-data-model/schema/core/operationscommon/entities/humanresources/hrm/hcmpositionv2entity",
     fields: [
-      { name: "PositionId", type: "String(20)", note: "Natural key, user-defined position ID (e.g. '000220')" },
-      { name: "JobId", type: "String(20)", note: "FK → HcmJob; the job definition this position is an instance of" },
-      { name: "PositionTypeId", type: "String(20)", note: "FK → HcmPositionType (Full-time, Part-time, etc.); nullable" },
-      { name: "TitleId", type: "String(10)", note: "FK → HcmTitle; position title shown on worker record; nullable" },
-      { name: "Activation", type: "UtcDateTime", note: "Date the position becomes active in the system" },
-      { name: "Retirement", type: "UtcDateTime", note: "Date the position is retired / deactivated; nullable" },
-      { name: "DepartmentNumber", type: "String(10)", note: "FK → OMOperatingUnit (Department); nullable" },
-      { name: "CompensationRegionId", type: "String(10)", note: "FK → HcmCompensationRegion; drives comp grid selection; nullable" },
+      { name: "PositionId", type: "String", note: "Natural key, user-defined position ID." },
     ],
   },
 
   HcmPositionHierarchy: {
     name: "HcmPositionHierarchy",
-    description: "Defines parent-child reporting relationships between positions for a given hierarchy type (Line, Matrix, Project, etc.). Supports multiple concurrent hierarchies. Date-effective via ValidFrom/ValidTo.",
+    description: "Parent-child reporting relationship between two positions for a given hierarchy type (Line, Matrix, and so on). Date-effective: ValidFrom/ValidTo bound the relationship, and one position can appear in several hierarchies at once.",
     module: "Human Resources",
-    docsUrl: "https://learn.microsoft.com/common-data-model/schema/core/operationscommon/entities/humanresources/hrm/hcmpositionhierarchyentity",
     fields: [
-      { name: "PositionId", type: "String(20)", note: "FK → HcmPosition; the child (reporting) position" },
-      { name: "ParentPositionId", type: "String(20)", note: "FK → HcmPosition; the parent ('reports to') position" },
-      { name: "PositionHierarchyType", type: "String(20)", note: "FK → HcmPositionHierarchyType; identifies the hierarchy (e.g. 'Line')" },
-      { name: "HierarchyType", type: "String(20)", note: "Denormalized hierarchy type name" },
-      { name: "ValidFrom", type: "UtcDateTime", note: "Effective start date of this reporting relationship" },
-      { name: "ValidTo", type: "UtcDateTime", note: "Effective end date; nullable for open-ended relationships" },
+      { name: "Position", type: "Int64", fkTarget: "HcmPosition.RecId", note: "The child (reporting) position." },
+      { name: "ParentPosition", type: "Int64", fkTarget: "HcmPosition.RecId", note: "The parent ('reports to') position." },
+      { name: "PositionHierarchyType", type: "Int64", fkTarget: "HcmPositionHierarchyType.RecId", note: "Identifies which hierarchy this edge belongs to." },
+      { name: "ValidFrom", type: "UtcDateTime", note: "Effective start of the reporting relationship." },
+      { name: "ValidTo", type: "UtcDateTime", note: "Effective end; open-ended while the relationship is current." },
     ],
   },
 
@@ -5944,224 +6143,379 @@ export const tableDefs: Record<string, TableDef> = {
 
   HcmEmployment: {
     name: "HcmEmployment",
-    description: "Employment period for a worker in a specific legal entity. Tracks start and end dates, employment type, work calendar, and regulatory establishment. An open EmploymentEndDate means currently employed. Multiple records can exist per worker across different companies.",
+    description: "Employment period for a worker in one legal entity. Worker-to-legal-entity is this table, not a column on HcmWorker. EmploymentType distinguishes the employment relationship; the employee/contractor split is carried by the HcmEmploymentEmployee and HcmEmploymentContractor subtypes.",
     module: "Human Resources",
-    docsUrl: "https://learn.microsoft.com/common-data-model/schema/core/operationscommon/entities/humanresources/hrm/hcmemploymententity",
     fields: [
-      { name: "Worker", type: "Int64", note: "FK → HcmWorker.RecId; the employed worker" },
-      { name: "PersonnelNumber", type: "String(20)", note: "Denormalized natural key of the worker" },
-      { name: "LegalEntityId", type: "String(4)", note: "FK → CompanyInfo; the employing legal entity / company" },
-      { name: "EmploymentStartDate", type: "UtcDateTime", note: "Official start date of employment" },
-      { name: "EmploymentEndDate", type: "UtcDateTime", note: "End date; NULL or open = currently employed" },
-      { name: "WorkerType", type: "Enum", note: "Employee or Contractor for this employment period" },
-      { name: "CalendarId", type: "String(10)", note: "FK → WorkCalendar; work schedule calendar; nullable" },
+      { name: "DefaultDimension", type: "Int64", fkTarget: "DimensionAttributeValueSet.RecId", note: "Default financial dimension set for the employment." },
+      { name: "EmploymentId", type: "String", note: "Natural key of the employment record." },
+      { name: "EmploymentType", type: "Enum", note: "Employment relationship type (employee, contractor, and so on)." },
+      { name: "LegalEntity", type: "Int64", fkTarget: "CompanyInfo.RecId", note: "The employing legal entity." },
+      { name: "ValidFrom", type: "UtcDateTime", note: "Start of the employment period." },
+      { name: "ValidTo", type: "UtcDateTime", note: "End of the employment period; open while the worker is employed." },
+      { name: "Worker", type: "Int64", fkTarget: "HcmWorker.RecId", note: "The employed worker." },
     ],
   },
 
-  HcmOnboardingTask: {
-    name: "HcmOnboardingTask",
-    description: "Individual task record within an onboarding, offboarding, or transition checklist. Can be assigned to a specific worker, position, group of positions, the new hire's manager, or the affected employee. Due date is calculated as an offset (days) from the hire/termination/transition date.",
-    module: "Human Resources – Task Management",
-    docsUrl: "https://learn.microsoft.com/dynamics365/human-resources/hr-task-mgmt",
+  HcmPositionWorkerAssignment: {
+    name: "HcmPositionWorkerAssignment",
+    description: "Bridge record that assigns a worker to a position for a validity period. This is the only real path between HcmPosition and HcmWorker — HcmPosition itself has no declared relation to the worker.",
+    module: "Human Resources",
     fields: [
-      { name: "TaskId", type: "String(36)", note: "PK; GUID-style unique task identifier" },
-      { name: "Name", type: "String(100)", note: "Display name of the task" },
-      { name: "ChecklistId", type: "String(20)", note: "FK → HcmChecklist; the checklist template this task belongs to" },
-      { name: "AssignmentType", type: "Enum", note: "Worker / Position / Group / Manager / Employee" },
-      { name: "AssignedTo", type: "String(20)", note: "The specific worker/position/group ID; type depends on AssignmentType" },
-      { name: "DueDateOffset", type: "Integer", note: "Days before (negative) or after (positive) start/termination date" },
-      { name: "Optional", type: "Enum", note: "Yes = informational only; No = required" },
-      { name: "TaskLinkType", type: "Enum", note: "URL / MenuItem / WorkerDetails — defines the completion link; nullable" },
+      { name: "Position", type: "Int64", fkTarget: "HcmPosition.RecId", note: "The position being filled." },
+      { name: "ValidFrom", type: "UtcDateTime", note: "Start of the assignment." },
+      { name: "ValidTo", type: "UtcDateTime", note: "End of the assignment; open while the worker holds the position." },
+      { name: "Worker", type: "Int64", fkTarget: "HcmWorker.RecId", note: "The worker assigned to the position." },
     ],
   },
 
-  HcmChecklist: {
-    name: "HcmChecklist",
-    description: "Onboarding, offboarding, or transition checklist template. Groups a set of tasks together. Assigned to a worker at hire, termination, or transfer time. Supports a default owner (for fallback task assignment) and a work calendar for due-date calculations.",
-    module: "Human Resources – Task Management",
-    docsUrl: "https://learn.microsoft.com/dynamics365/human-resources/hr-task-mgmt",
+  HcmEmploymentEmployee: {
+    name: "HcmEmploymentEmployee",
+    description: "Employee subtype of HcmEmployment. One row per employment period held by an employee; carries the employee-only payroll, pay-scale and probation fields that a contractor employment has no use for.",
+    module: "Human Resources",
     fields: [
-      { name: "ChecklistId", type: "String(20)", note: "PK; natural key for the checklist template" },
-      { name: "Name", type: "String(100)", note: "Display name of the checklist" },
-      { name: "ChecklistType", type: "Enum", note: "Onboarding / Offboarding / Transition" },
-      { name: "Owner", type: "String(20)", note: "FK → HcmWorker.PersonnelNumber; default assignee when no other owner can be resolved" },
-      { name: "CalendarId", type: "String(10)", note: "FK → WorkCalendar; used to calculate working-day due dates for tasks" },
-      { name: "Description", type: "String(1000)", note: "Optional description of the checklist purpose; nullable" },
+      { name: "EmployeeSavingAmount", type: "Real", note: "Employee-side savings amount for the employment." },
+      { name: "EmployerSavingAmount", type: "Real", note: "Employer-side savings amount for the employment." },
+      { name: "Employment", type: "Int64", fkTarget: "HcmEmployment.RecId", note: "The employment period this employee record extends." },
+      { name: "IncomeTaxCategory", type: "Int64", note: "Income tax category used for payroll." },
+      { name: "IncomeTaxCode", type: "Int64", note: "Income tax code used for payroll." },
+      { name: "MunicipalCountyCountryRegion", type: "String", note: "Municipal county country/region for local tax." },
+      { name: "MunicipalCountyCounty", type: "String", note: "Municipal county for local tax." },
+      { name: "MunicipalCountyState", type: "String", note: "Municipal county state for local tax." },
+      { name: "PayrollCurrency", type: "String", note: "Currency used for this employment's payroll." },
+      { name: "PayrollSalaryScaleDate", type: "Date", note: "Salary scale date driving pay-scale lookup." },
+      { name: "PayrollSalarySeniorityDate", type: "Date", note: "Seniority date driving pay-scale lookup." },
+      { name: "PayrollSalaryType", type: "Enum", note: "Salary type; enum HcmSalaryType." },
+      { name: "PensionEnrollment", type: "UtcDateTime", note: "Pension enrollment date and time." },
+      { name: "PensionStart", type: "UtcDateTime", note: "Pension start date and time." },
+      { name: "ProbationEndDate", type: "UtcDateTime", note: "End of the probation period." },
+      { name: "RelocationReimbursement", type: "Real", note: "Relocation reimbursement amount for the employee." },
+      { name: "ValidFrom", type: "UtcDateTime", note: "Start of this employee record's validity." },
+      { name: "ValidTo", type: "UtcDateTime", note: "End of this employee record's validity." },
     ],
   },
 
-  SecurityUserRole: {
-    name: "SecurityUserRole",
-    description: "Maps a D365FO system user to a security role. Controls which modules, menu items, and data the user can access via role-based security. Assignment can be manual or rule-driven (automatic). Protected by AOSAuthorization=CreateUpdateDelete to prevent privilege escalation.",
-    module: "System Administration – Security",
-    docsUrl: "https://learn.microsoft.com/dynamics365/fin-ops-core/dev-itpro/dev-ref/system-tables#securityuserrole",
+  HcmEmploymentContractor: {
+    name: "HcmEmploymentContractor",
+    description: "Contractor subtype of HcmEmployment. One row per employment period held by a contractor; ties the employment to the purchase order and vendor that supplied the contractor.",
+    module: "Human Resources",
     fields: [
-      { name: "User", type: "String(UserId)", note: "FK → UserInfo; the system user being granted the role" },
-      { name: "SecurityRole", type: "Int64", note: "FK → SecurityRole.RecId; the role being assigned" },
-      { name: "AssignmentMode", type: "Enum", note: "Manual or Automatic (rule-driven)" },
-      { name: "AssignmentStatus", type: "Enum", note: "Enabled or Disabled" },
-      { name: "ValidFrom", type: "UtcDateTime", note: "Effective start of the assignment" },
-      { name: "ValidTo", type: "UtcDateTime", note: "Effective end of the assignment; nullable" },
+      { name: "Employment", type: "Int64", fkTarget: "HcmEmployment.RecId", note: "The employment period this contractor record extends." },
+      { name: "PurchID", type: "String", note: "Purchase order covering the contractor engagement." },
+      { name: "PurchReqTable", type: "Int64", note: "Purchase requisition record behind the engagement." },
+      { name: "ValidFrom", type: "UtcDateTime", note: "Start of this contractor record's validity." },
+      { name: "ValidTo", type: "UtcDateTime", note: "End of this contractor record's validity." },
+      { name: "VendorDataAreaID", type: "String", note: "Legal entity that holds the vendor record." },
+      { name: "VendorID", type: "String", note: "Vendor account that supplied the contractor." },
     ],
   },
 
-  HcmCompPlan: {
-    name: "HcmCompPlan",
-    description: "Base compensation plan definition — the parent record that specifies plan ID, plan type (Fixed/Variable), currency, effective date range, and pay frequency. Fixed and variable compensation plans both reference this record. Eligibility rules are attached to control which workers can be enrolled.",
-    module: "Human Resources – Compensation",
-    docsUrl: "https://learn.microsoft.com/dynamics365/human-resources/hr-compensation-overview",
+  HcmOnboardProcessHeader: {
+    name: "HcmOnboardProcessHeader",
+    description: "Header of one onboarding process instance — the business-process header plus the worker and employment being onboarded. Onboarding tasks hang off this header; there is no separate checklist table.",
+    module: "Human Resources",
     fields: [
-      { name: "Plan", type: "String(20)", note: "PK; natural key / plan ID (e.g. 'ANNUAL-FIXED')" },
-      { name: "Description", type: "String(60)", note: "Human-readable plan description" },
-      { name: "Type", type: "Enum", note: "Fixed / Variable / None — determines the subtype" },
-      { name: "EffectiveDate", type: "Date", note: "Date the plan becomes active" },
-      { name: "ExpirationDate", type: "Date", note: "Date the plan expires; nullable for open-ended plans" },
-      { name: "Currency", type: "String(3)", note: "ISO currency code for all pay amounts in this plan" },
-      { name: "PayFrequency", type: "String(10)", note: "FK → HcmPayRateConversion; pay frequency (Annual, Monthly, Hourly, etc.)" },
+      { name: "Employment", type: "Int64", fkTarget: "HcmEmployment.RecId", note: "The employment period being onboarded." },
+      { name: "OnboardedEmployee", type: "Int64", fkTarget: "HcmWorker.RecId", note: "The worker being onboarded." },
+      { name: "ProcessHeader", type: "Int64", note: "The business-process header this onboarding instance runs on." },
     ],
   },
 
-  HcmCompFixedPlan: {
-    name: "HcmCompFixedPlan",
-    description: "Fixed compensation plan details — extends the base HcmCompPlan with a salary grid structure, hire rule, out-of-range tolerance, and control point. Workers are enrolled via the fixed compensation enrollment process tied to their position's compensation level.",
-    module: "Human Resources – Compensation",
-    docsUrl: "https://learn.microsoft.com/dynamics365/human-resources/hcm-comp-fixed-plan",
+  HcmOnboardProcessTask: {
+    name: "HcmOnboardProcessTask",
+    description: "One task inside a running onboarding process, optionally assigned to a position. Task configuration lives here and in HcmOnboardLibraryTask / HcmOnboardTemplateTask, not in a generic checklist table.",
+    module: "Human Resources",
     fields: [
-      { name: "Plan", type: "String(20)", note: "PK / FK → HcmCompPlan; the parent plan this fixed plan belongs to" },
-      { name: "CompensationStructure", type: "String(20)", note: "FK → HcmCompGrid; the salary grade/band/step matrix" },
-      { name: "HireRule", type: "Enum", note: "Percent (prorate new hires) or None" },
-      { name: "OutOfRangeTolerance", type: "Enum", note: "None / Soft (warn) / Hard (error) for out-of-range pay" },
-      { name: "RecommendationAllowed", type: "Enum", note: "Yes = process events allow guideline overrides" },
-      { name: "ControlPoint", type: "String(20)", note: "FK → HcmCompRefPointSetupLine; ideal pay reference point (e.g. midpoint)" },
-      { name: "RefPointSetupId", type: "String(20)", note: "FK → HcmCompRefPointSetup; reference point configuration for this plan" },
+      { name: "AssignedPosition", type: "Int64", fkTarget: "HcmPosition.RecId", note: "Position the task is assigned to, when the assignment type is position." },
+      { name: "AssignmentType", type: "Enum", note: "How the task is assigned (position, worker group, manager, and so on)." },
+      { name: "Task", type: "Int64", note: "The business-process task this process task executes." },
     ],
   },
 
-  HcmBenefitPlan: {
-    name: "HcmBenefitPlan",
-    description: "Benefit plan definition — covers health, dental, vision, life, retirement, and other benefit types. Specifies the benefit type, vendor, coverage options, eligibility rules, premium currency, and effective dates. Workers are enrolled in plans via HcmBenefit.",
-    module: "Human Resources – Benefits Management",
-    docsUrl: "https://learn.microsoft.com/dynamics365/human-resources/hr-benefits-plans-setup",
+  HcmOnboardLibraryTask: {
+    name: "HcmOnboardLibraryTask",
+    description: "Onboarding task drawn from the business-process task library, with its optional position assignment. Library entries are the reusable task definitions that onboarding templates and running processes select from.",
+    module: "Human Resources",
     fields: [
-      { name: "PlanId", type: "String(20)", note: "PK; natural key for the benefit plan (e.g. 'HEALTH-PPO')" },
-      { name: "Description", type: "String(60)", note: "Plan display name" },
-      { name: "PlanTypeId", type: "String(20)", note: "FK → HcmBenefitType; type (Medical, Dental, Vision, 401k, etc.)" },
-      { name: "StartDate", type: "Date", note: "Plan effective start date" },
-      { name: "EndDate", type: "Date", note: "Plan effective end date; nullable for ongoing plans" },
-      { name: "VendorAccountNum", type: "String(20)", note: "FK → VendTable; the benefit insurance/plan provider vendor" },
-      { name: "Currency", type: "String(3)", note: "ISO currency code for premium calculations" },
+      { name: "AssignedPosition", type: "Int64", fkTarget: "HcmPosition.RecId", note: "Position the task is assigned to, when the assignment type is position." },
+      { name: "AssignmentType", type: "Enum", note: "How the task is assigned (position, worker group, manager, and so on)." },
+      { name: "LibraryTask", type: "Int64", note: "The library task this record configures." },
     ],
   },
 
-  HcmBenefit: {
-    name: "HcmBenefit",
-    description: "Worker's enrollment in a specific benefit plan for a given period. Records the selected coverage option, employee/employer cost amounts, enrollment status (Selected/Confirmed/Waived), and effective dates. Created during open enrollment or life events.",
-    module: "Human Resources – Benefits Management",
-    docsUrl: "https://learn.microsoft.com/dynamics365/human-resources/hr-benefits-plans-worker",
+  HcmOnboardTemplateTask: {
+    name: "HcmOnboardTemplateTask",
+    description: "Onboarding task placed in a process template, with its optional position assignment. Template tasks are copied into a running process when the template is applied to a worker.",
+    module: "Human Resources",
     fields: [
-      { name: "Worker", type: "Int64", note: "FK → HcmWorker.RecId; the enrolled worker" },
-      { name: "PlanId", type: "String(20)", note: "FK → HcmBenefitPlan; the benefit plan the worker is enrolled in" },
-      { name: "CoverageOptionId", type: "String(20)", note: "FK → HcmBenefitOption; coverage tier (Employee Only, Employee+Spouse, etc.)" },
-      { name: "StartDate", type: "Date", note: "Enrollment effective start date" },
-      { name: "EndDate", type: "Date", note: "Enrollment end date; nullable for open-ended enrollments" },
-      { name: "Status", type: "Enum", note: "Selected / Confirmed / Waived / Cancelled" },
-      { name: "LegalEntityId", type: "String(4)", note: "FK → CompanyInfo; the employing legal entity" },
+      { name: "AssignedPosition", type: "Int64", fkTarget: "HcmPosition.RecId", note: "Position the task is assigned to, when the assignment type is position." },
+      { name: "AssignmentType", type: "Enum", note: "How the task is assigned (position, worker group, manager, and so on)." },
+      { name: "TemplateTask", type: "Int64", note: "The business-process template task this row configures." },
     ],
   },
 
-  HcmEligibilityRule: {
-    name: "HcmEligibilityRule",
-    description: "Benefit eligibility rule — defines the criteria a worker must meet to be eligible for a specific benefit plan (e.g. employment type = full-time, length of service ≥ 90 days, job title match). Rules are evaluated during open enrollment to filter available plans per worker.",
-    module: "Human Resources – Benefits Management",
-    docsUrl: "https://learn.microsoft.com/dynamics365/human-resources/hr-benefits-define-eligibility-rules",
+  HcmOnboardTemplateAgentTasks: {
+    name: "HcmOnboardTemplateAgentTasks",
+    description: "Per-template configuration of the onboarding agent tasks — which onboarding steps are enabled for a business-process template, and under what task name and identifier.",
+    module: "Human Resources",
     fields: [
-      { name: "RecId", type: "Int64", note: "Surrogate primary key" },
-      { name: "RuleId", type: "String", note: "Natural key — eligibility rule identifier" },
-      { name: "Description", type: "String", note: "Human-readable description of what this rule tests" },
-      { name: "RuleType", type: "Enum", note: "Type of condition: EmploymentType, JobTitle, Department, LengthOfService, etc." },
-      { name: "EffectiveDate", type: "Date", note: "Date from which this rule is active" },
-      { name: "ExpirationDate", type: "Date", note: "Date after which this rule is no longer evaluated; nullable for open-ended rules" },
+      { name: "Description", type: "String", note: "Description of the configured agent task." },
+      { name: "IsEnabled", type: "Enum", note: "Whether the agent task is enabled for the template." },
+      { name: "Name", type: "Enum", note: "Which onboarding step the agent task represents; enum BusinessProcessEmployeeOnboardingStep." },
+      { name: "TaskId", type: "Guid", note: "Identifier shared with the business-process task." },
+      { name: "TaskName", type: "String", note: "Display name of the task." },
+      { name: "TemplateHeader", type: "Int64", note: "The business-process template header these tasks belong to." },
+    ],
+  },
+
+  HRMCompFixedPlanTable: {
+    name: "HRMCompFixedPlanTable",
+    description: "Fixed compensation plan: the pay structure, hire rule, tolerance and reference-point control for a fixed plan. This is the business table — the HcmComp*Staging tables are dual-write staging and carry no business meaning.",
+    module: "Human Resources",
+    fields: [
+      { name: "ControlPoint", type: "String", note: "Reference point used as the plan's control point." },
+      { name: "CurrencyCode", type: "String", note: "Currency for the plan's amounts." },
+      { name: "Description", type: "String", note: "Plan description." },
+      { name: "EnableRecommendation", type: "Enum", note: "Whether guideline recommendations are enabled; enum NoYes." },
+      { name: "GridId", type: "String", note: "Compensation grid (structure) the plan uses." },
+      { name: "HireRule", type: "Enum", note: "How new hires are handled; enum HRMCompHireRule." },
+      { name: "MarketPriceIndicator", type: "Enum", note: "Whether the plan is flagged as a market-price indicator; enum NoYes." },
+      { name: "PayFrequencyId", type: "String", note: "Pay frequency applied to the plan." },
+      { name: "PlanId", type: "String", note: "Natural key of the fixed plan." },
+      { name: "RestrictAccess", type: "Enum", note: "Whether access to the plan is restricted; enum NoYes." },
+      { name: "Tolerance", type: "Enum", note: "Out-of-range tolerance; enum HRMCompTolerance." },
+      { name: "Type", type: "Enum", note: "Compensation type; enum HcmCompensationType." },
+      { name: "ValidFrom", type: "Date", note: "Start of the plan's validity." },
+      { name: "ValidTo", type: "Date", note: "End of the plan's validity." },
+    ],
+  },
+
+  HRMCompVarPlanTable: {
+    name: "HRMCompVarPlanTable",
+    description: "Variable compensation plan: award basis, leverage curve, vesting and unit configuration for a variable plan. Separate from the fixed plan — both are business tables under the HRMComp prefix.",
+    module: "Human Resources",
+    fields: [
+      { name: "AwardBasis", type: "Enum", note: "What the award is based on; enum HRMCompVarAwardBasis." },
+      { name: "AwardBasisCalculation", type: "Enum", note: "How the award basis is calculated; enum HRMCompVarPlanAwardBasis." },
+      { name: "CalcType", type: "Enum", note: "Calculation type for the award; enum HRMCompVarPlanCalcType." },
+      { name: "Description", type: "String", note: "Plan description." },
+      { name: "EnableEnrollment", type: "Enum", note: "Whether enrollment is enabled; enum NoYes." },
+      { name: "EnableLevels", type: "Enum", note: "Whether level overrides are enabled; enum NoYes." },
+      { name: "EnableRecommendation", type: "Enum", note: "Whether guideline recommendations are enabled; enum NoYes." },
+      { name: "HireRule", type: "Enum", note: "How new hires are handled; enum HRMCompHireRule." },
+      { name: "Leverage100Percent", type: "Real", note: "Payout percentage at 100% of objective." },
+      { name: "LeverageMaximum", type: "Real", note: "Upper bound of the leverage curve." },
+      { name: "LeverageMinimum", type: "Real", note: "Lower bound of the leverage curve." },
+      { name: "LeverageOverObjective", type: "Real", note: "Leverage applied above objective." },
+      { name: "LeverageToleranceMax", type: "Enum", note: "Upper tolerance on the leverage curve; enum HRMCompTolerance." },
+      { name: "LeverageToleranceMin", type: "Enum", note: "Lower tolerance on the leverage curve; enum HRMCompTolerance." },
+      { name: "LeverageUnderObjective", type: "Real", note: "Leverage applied below objective." },
+      { name: "PercentOfBasis", type: "Real", note: "Award percentage applied to the award basis." },
+      { name: "PlanId", type: "String", note: "Natural key of the variable plan." },
+      { name: "RestrictAccess", type: "Enum", note: "Whether access to the plan is restricted; enum NoYes." },
+      { name: "TypeId", type: "String", note: "Variable plan type." },
+      { name: "UnitCurrencyCode", type: "String", note: "Currency of the plan's units." },
+      { name: "UnitRelationship", type: "Enum", note: "Whether the plan is unit-based; enum NoYes." },
+      { name: "UnitValue", type: "Real", note: "Value of one unit." },
+      { name: "UnitsReal", type: "Real", note: "Number of units granted." },
+      { name: "ValidFrom", type: "Date", note: "Start of the plan's validity." },
+      { name: "ValidTo", type: "Date", note: "End of the plan's validity." },
+      { name: "VestingId", type: "String", note: "Vesting schedule applied to the plan." },
+    ],
+  },
+
+  HRMCompEligibility: {
+    name: "HRMCompEligibility",
+    description: "Compensation eligibility rule — the job, job function, job type, department, union and location criteria that decide which workers a compensation plan applies to. Distinct from benefit eligibility.",
+    module: "Human Resources",
+    fields: [
+      { name: "CompLocation", type: "Int64", note: "Compensation location criterion." },
+      { name: "Department", type: "Int64", note: "Department criterion; an OMOperatingUnit reference." },
+      { name: "Description", type: "String", note: "Rule description." },
+      { name: "EligibilityId", type: "String", note: "Natural key of the eligibility rule." },
+      { name: "EnableLevels", type: "Enum", note: "Whether level overrides apply; enum NoYes." },
+      { name: "Job", type: "Int64", note: "Job criterion." },
+      { name: "JobFunction", type: "Int64", note: "Job function criterion." },
+      { name: "JobType", type: "Int64", note: "Job type criterion." },
+      { name: "PlanId", type: "String", note: "The compensation plan the rule applies to." },
+      { name: "PlanType", type: "Enum", note: "Whether the rule targets a fixed or variable plan; enum HRMCompPlanType." },
+      { name: "Unions", type: "Int64", note: "Union criterion." },
+      { name: "ValidFrom", type: "Date", note: "Start of the rule's validity." },
+      { name: "ValidTo", type: "Date", note: "End of the rule's validity." },
+    ],
+  },
+
+  HRMCompEvent: {
+    name: "HRMCompEvent",
+    description: "Compensation event header — one loaded compensation process run, with its load date, lock state, error status and the process it was loaded for. Events carry the per-worker compensation lines that the process awards.",
+    module: "Human Resources",
+    fields: [
+      { name: "ErrorStatus", type: "Enum", note: "Load error status of the event; enum HRMCompEventErrorStatus." },
+      { name: "EventId", type: "String", note: "Natural key of the compensation event." },
+      { name: "LoadDate", type: "Date", note: "Date the event was loaded." },
+      { name: "Locked", type: "Enum", note: "Whether the event is locked for editing; enum NoYes." },
+      { name: "ProcessId", type: "String", fkTarget: "HRMCompProcess", note: "The compensation process the event belongs to." },
+    ],
+  },
+
+  HRMCompProcess: {
+    name: "HRMCompProcess",
+    description: "Compensation process — the cycle configuration a run of compensation events executes against: cycle dates, point-in-time date, pro-rate hire date and process type.",
+    module: "Human Resources",
+    fields: [
+      { name: "CycleFromDate", type: "Date", note: "Start of the compensation cycle." },
+      { name: "CycleToDate", type: "Date", note: "End of the compensation cycle." },
+      { name: "Description", type: "String", note: "Process description." },
+      { name: "EnableFromMenu", type: "Enum", note: "Whether the process can be started from the menu; enum NoYes." },
+      { name: "LoadDate", type: "Date", note: "Date the process was loaded." },
+      { name: "PointInTimeDate", type: "Date", note: "Point-in-time date used when the process evaluates compensation." },
+      { name: "ProRateHireDate", type: "Date", note: "Hire date used to pro-rate awards." },
+      { name: "ProcessId", type: "String", note: "Natural key of the compensation process." },
+      { name: "TransActiveDate", type: "Date", note: "Date the resulting compensation transactions become active." },
+      { name: "Type", type: "Enum", note: "Process type; enum HRMCompProcessType." },
+    ],
+  },
+
+  HcmCompensationLevel: {
+    name: "HcmCompensationLevel",
+    description: "Compensation level — a named level (with a type and sequence) that compensation structures and eligibility levels refer to. Level setup only; it holds no worker or plan assignment.",
+    module: "Human Resources",
+    fields: [
+      { name: "CompensationLevelId", type: "String", note: "Natural key of the compensation level." },
+      { name: "Description", type: "String", note: "Level description." },
+      { name: "LineNum", type: "Real", note: "Display and ordering sequence." },
+      { name: "Type", type: "Enum", note: "Compensation type the level belongs to; enum HcmCompensationType." },
+    ],
+  },
+
+  HcmBenefitType: {
+    name: "HcmBenefitType",
+    description: "Benefit type — the category a benefit plan belongs to (medical, dental, life, retirement and so on), with its payroll category and concurrent-enrollment rule.",
+    module: "Human Resources",
+    fields: [
+      { name: "BenefitTypeId", type: "String", note: "Natural key of the benefit type." },
+      { name: "ConcurrentEnrollment", type: "Enum", note: "How concurrent enrollments of this type are handled." },
+      { name: "Description", type: "String", note: "Type description." },
+      { name: "PayrollCategory", type: "Enum", note: "Payroll category the type posts under." },
+    ],
+  },
+
+  HcmBenefitOption: {
+    name: "HcmBenefitOption",
+    description: "Benefit option — a selectable coverage tier under a plan (employee only, employee plus spouse, and so on), flagged as dependent or beneficiary coverage where applicable.",
+    module: "Human Resources",
+    fields: [
+      { name: "BenefitOptionID", type: "String", note: "Natural key of the benefit option." },
+      { name: "Description", type: "String", note: "Option description." },
+      { name: "IsBeneficiaryOption", type: "Enum", note: "Whether the option is a beneficiary (not worker) coverage; enum NoYes." },
+      { name: "IsDependentOption", type: "Enum", note: "Whether the option covers dependents; enum NoYes." },
+    ],
+  },
+
+  HcmBenefitEligibilityRule: {
+    name: "HcmBenefitEligibilityRule",
+    description: "Benefit eligibility rule — points at the expression (XPath query) that decides eligibility, or at a system policy rule. This is the benefit-side eligibility mechanism; compensation eligibility is HRMCompEligibility.",
+    module: "Human Resources",
+    fields: [
+      { name: "ExpressionTable", type: "Int64", note: "The expression record holding the eligibility query." },
+      { name: "IsExpressionChanged", type: "Enum", note: "Whether the referenced expression has changed since the rule was configured; enum NoYes." },
+    ],
+  },
+
+  HcmBenefitEligibility: {
+    name: "HcmBenefitEligibility",
+    description: "Benefit eligibility process — one eligibility run with its event type, enrollment window, effective date, processing status and last processed date.",
+    module: "Human Resources",
+    fields: [
+      { name: "BenefitEligibilityEvent", type: "Enum", note: "The event that triggered eligibility evaluation." },
+      { name: "BenefitEligibilityId", type: "String", note: "Natural key of the eligibility record." },
+      { name: "DaysToEnroll", type: "Int", note: "Enrollment window in days." },
+      { name: "Description", type: "String", note: "Description of the eligibility record." },
+      { name: "EligibilityEffectiveDate", type: "UtcDateTime", note: "Date the eligibility takes effect." },
+      { name: "EnrollmentFromDate", type: "UtcDateTime", note: "First date enrollment is allowed." },
+      { name: "LastProcessedDate", type: "Date", note: "Last date the eligibility was processed." },
+      { name: "ProcessStatus", type: "Enum", note: "Processing status of the eligibility run." },
     ],
   },
 
   HcmLeaveType: {
     name: "HcmLeaveType",
-    description: "Leave type definition (e.g. Vacation/PTO, Sick Leave, FMLA, Parental Leave). Configures the category (Scheduled/Unscheduled), unit (Hours/Days), accrual earning code, approval workflow, reason code requirements, and calendar color.",
-    module: "Human Resources – Leave and Absence",
-    docsUrl: "https://learn.microsoft.com/dynamics365/human-resources/hr-admin-integration-payroll-api-leave-type",
-    fields: [
-      { name: "LeaveTypeId", type: "String(20)", note: "PK; natural key (e.g. 'PTO', 'SICK', 'FMLA')" },
-      { name: "Description", type: "String(60)", note: "Human-readable description" },
-      { name: "Category", type: "Enum", note: "None / Scheduled / Unscheduled — affects absence management reporting" },
-      { name: "ReasonCodeRequired", type: "Enum", note: "Yes = worker must supply a reason code when submitting requests" },
-      { name: "LeaveAmountUnit", type: "Enum", note: "Hours or Days — unit used when entering leave amounts" },
-      { name: "EarningCodeId", type: "String(10)", note: "FK → PayrollEarningCode; payroll earning code linked to this leave type; nullable" },
-      { name: "WorkflowId", type: "String(20)", note: "FK → workflow definition; approval workflow for leave requests; nullable" },
-    ],
-  },
-
-  HcmLeaveAccrualSchedule: {
-    name: "HcmLeaveAccrualSchedule",
-    description: "Leave accrual schedule — defines the rate and frequency at which a worker earns (accrues) leave balance for a given leave type. Specifies accrual amount per period, accrual frequency (monthly, bi-weekly), carry-forward limits, and waiting period before accrual begins.",
-    module: "Human Resources – Leave and Absence",
-    docsUrl: "https://learn.microsoft.com/dynamics365/human-resources/hr-leave-and-absence-accrue",
-    fields: [
-      { name: "RecId", type: "Int64", note: "Surrogate primary key" },
-      { name: "LeaveAccrualScheduleId", type: "String", note: "Natural key — accrual schedule identifier" },
-      { name: "Description", type: "String", note: "Human-readable description of the schedule" },
-      { name: "LeaveTypeId", type: "String", fkTarget: "HcmLeaveType.LeaveTypeId", note: "FK to the leave type this schedule accrues for" },
-      { name: "AccrualFrequency", type: "Enum", note: "Frequency of accrual: Monthly, SemiMonthly, BiWeekly, Weekly" },
-      { name: "AccrualAmount", type: "Decimal", note: "Hours or days accrued per accrual period" },
-      { name: "MaximumCarryForward", type: "Decimal", note: "Maximum balance that can be carried forward to the next accrual year; nullable for unlimited" },
-      { name: "WaitingPeriod", type: "Int32", note: "Days a new employee must wait before accrual begins" },
-    ],
-  },
-
-  HcmLeaveBank: {
-    name: "HcmLeaveBank",
-    description: "Leave bank — stores the current accrued leave balance per worker per leave type. Updated by accrual runs and leave request approvals. One row per worker–leave type combination; Balance holds the available hours/days.",
-    module: "Human Resources – Leave and Absence",
-    docsUrl: "https://learn.microsoft.com/en-us/dynamics365/human-resources/hr-leave-and-absence-overview",
-    fields: [
-      { name: "RecId", type: "Int64", note: "Surrogate primary key" },
-      { name: "Worker", type: "Int64", fkTarget: "HcmWorker.RecId", note: "FK to the worker whose leave balance is tracked" },
-      { name: "LeaveTypeId", type: "String", fkTarget: "HcmLeaveType.LeaveTypeId", note: "FK to the leave type for this balance" },
-      { name: "Balance", type: "Decimal", note: "Current available balance in the unit defined by the leave type (hours or days)" },
-      { name: "TotalAccrued", type: "Decimal", note: "Total amount accrued in the current accrual year before any usage" },
-      { name: "TotalUsed", type: "Decimal", note: "Total amount used (approved leave requests) in the current year" },
-      { name: "CarryForwardBalance", type: "Decimal", note: "Balance carried forward from the previous accrual year" },
-    ],
-  },
-
-  HcmLeaveRequest: {
-    name: "HcmLeaveRequest",
-    description: "Worker leave request record. Captures a single request for time off — leave type, date, quantity, status, and any attached reason code or comment. Follows a configurable approval workflow. Status progresses: Draft → Submitted → Approved/Denied.",
-    module: "Human Resources – Leave and Absence",
-    docsUrl: "https://learn.microsoft.com/dynamics365/human-resources/hr-admin-integration-payroll-api-leave-request",
-    fields: [
-      { name: "RequestId", type: "String(36)", note: "PK; system-generated unique request identifier" },
-      { name: "PersonnelNumber", type: "String(20)", note: "FK (natural key) → HcmWorker; the requesting employee" },
-      { name: "LeaveTypeId", type: "String(20)", note: "FK → HcmLeaveType; the type of leave being requested" },
-      { name: "LeaveDate", type: "UtcDateTime", note: "The date(s) covered by this leave request" },
-      { name: "Amount", type: "Decimal", note: "Quantity of leave in units defined by HcmLeaveType.LeaveAmountUnit" },
-      { name: "Status", type: "Enum", note: "Draft / Submitted / Approved / Denied / Failed / Cancelled" },
-      { name: "ReasonCodeId", type: "String(20)", note: "FK → HcmReasonCode; reason for leave; required when LeaveType.ReasonCodeRequired=Yes" },
-      { name: "Comment", type: "String(2000)", note: "Free-text comment from worker; nullable" },
-    ],
-  },
-
-  HcmSeparation: {
-    name: "HcmSeparation",
-    description: "Worker termination / separation record. Formally ends employment by recording the termination date, reason code, last date worked, and re-hire eligibility. Initiates the offboarding process: ends position assignments, benefit elections, compensation, and leave accruals.",
+    description: "Leave type definition. Carries the type identifier, its description and the payroll earning code it posts to; the leave taken against it lives on HcmEmploymentLeave and the vacation balance on HcmEmploymentVacation.",
     module: "Human Resources",
-    docsUrl: "https://learn.microsoft.com/dynamics365/guidance/business-processes/hire-to-retire-onboard-terminate-employment",
     fields: [
-      { name: "Worker", type: "Int64", note: "FK → HcmWorker.RecId; the worker being terminated" },
-      { name: "Employment", type: "Int64", note: "FK → HcmEmployment.RecId; the specific employment period being ended" },
-      { name: "SeparationDate", type: "Date", note: "Official termination / separation effective date" },
-      { name: "LastDateWorked", type: "Date", note: "Last actual day the worker performed work; may differ from SeparationDate; nullable" },
-      { name: "ReasonCode", type: "String(10)", note: "FK → HcmReasonCode; termination reason (Resignation, Layoff, Retirement, etc.)" },
-      { name: "DataAreaId", type: "String(4)", note: "Legal entity where the employment is being terminated" },
+      { name: "EarningCode", type: "Int64", fkTarget: "PayrollEarningCode.RecId", note: "Payroll earning code the leave type posts to." },
+      { name: "LeaveTypeID", type: "String", note: "Natural key of the leave type." },
+      { name: "description", type: "String", note: "Leave type description." },
+    ],
+  },
+
+  HcmEmploymentLeave: {
+    name: "HcmEmploymentLeave",
+    description: "Leave taken by an employment period — one row per leave absence with its leave type and start/end dates. This is the record of leave actually registered against the employment.",
+    module: "Human Resources",
+    fields: [
+      { name: "Employment", type: "Int64", fkTarget: "HcmEmployment.RecId", note: "The employment period the leave belongs to." },
+      { name: "EndDate", type: "Date", note: "Last day of the leave." },
+      { name: "LeaveType", type: "Int64", fkTarget: "HcmLeaveType.RecId", note: "The leave type taken." },
+      { name: "Note", type: "String", note: "Free-text note on the leave." },
+      { name: "StartDate", type: "Date", note: "First day of the leave." },
+    ],
+  },
+
+  HcmEmploymentVacation: {
+    name: "HcmEmploymentVacation",
+    description: "Vacation and holiday entitlement for an employment period: hours total, taken, carried over and left, plus the holiday pay flags. One record per employment validity period.",
+    module: "Human Resources",
+    fields: [
+      { name: "Employment", type: "Int64", fkTarget: "HcmEmployment.RecId", note: "The employment period the entitlement belongs to." },
+      { name: "HolidaysPerYear", type: "Real", note: "Number of holidays granted per year." },
+      { name: "VacationHoursCarriedOver", type: "Real", note: "Vacation hours carried over from the previous period." },
+      { name: "VacationHoursLeft", type: "Real", note: "Vacation hours still available." },
+      { name: "VacationHoursTaken", type: "Real", note: "Vacation hours taken." },
+      { name: "VacationHoursTotal", type: "Real", note: "Total vacation hours granted." },
+      { name: "VacationPay", type: "Real", note: "Vacation pay amount." },
+      { name: "ValidFrom", type: "UtcDateTime", note: "Start of the entitlement period." },
+      { name: "ValidTo", type: "UtcDateTime", note: "End of the entitlement period." },
+      { name: "isPaidHolidays", type: "Enum", note: "Whether holidays are paid." },
+      { name: "isPaidPersonalDays", type: "Enum", note: "Whether personal days are paid." },
+      { name: "isPaidVacation", type: "Enum", note: "Whether vacation is paid." },
+    ],
+  },
+
+  HcmEmploymentTerm: {
+    name: "HcmEmploymentTerm",
+    description: "Employment term record — the agreement term that applies to an employment period. This is the real termination/term table; there is no separate separation table.",
+    module: "Human Resources",
+    fields: [
+      { name: "AgreementTerm", type: "Int64", note: "The agreement term applied to the employment." },
+      { name: "Employment", type: "Int64", fkTarget: "HcmEmployment.RecId", note: "The employment period the term applies to." },
+      { name: "ValidFrom", type: "UtcDateTime", note: "Start of the term." },
+      { name: "ValidTo", type: "UtcDateTime", note: "End of the term." },
+    ],
+  },
+
+  HcmBenefit: {
+    name: "HcmBenefit",
+    description: "Worker benefit enrollment — links a benefit plan and a coverage option for a validity period. The worker link is through the plan/option configuration and the employment, not a worker column here.",
+    module: "Human Resources",
+    fields: [
+      { name: "BenefitId", type: "String", note: "Natural key of the benefit enrollment." },
+      { name: "BenefitOption", type: "Int64", fkTarget: "HcmBenefitOption.RecId", note: "The coverage option selected." },
+      { name: "BenefitPlan", type: "Int64", fkTarget: "HcmBenefitPlan.RecId", note: "The benefit plan enrolled in." },
+      { name: "ValidFrom", type: "UtcDateTime", note: "Start of the enrollment." },
+      { name: "ValidTo", type: "UtcDateTime", note: "End of the enrollment." },
+    ],
+  },
+
+  HcmBenefitPlan: {
+    name: "HcmBenefitPlan",
+    description: "Benefit plan definition — one plan of a given benefit type, with its payroll impact and ACA reportability. Workers are enrolled against it through HcmBenefit and its coverage options.",
+    module: "Human Resources",
+    fields: [
+      { name: "ACAReportable", type: "Enum", note: "Whether the plan is ACA reportable; enum NoYes." },
+      { name: "BenefitPlanID", type: "String", note: "Natural key of the benefit plan." },
+      { name: "BenefitType", type: "Int64", fkTarget: "HcmBenefitType.RecId", note: "The benefit type the plan belongs to." },
+      { name: "Description", type: "String", note: "Plan description." },
+      { name: "PayrollImpact", type: "Enum", note: "How the plan affects payroll." },
     ],
   },
 
