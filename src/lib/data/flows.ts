@@ -2365,13 +2365,31 @@ export const flows: Flow[] = [
   {
     id: 'service',
     title: 'Service Lifecycle',
-    summary: 'Service agreements, orders, dispatch, and billing.',
+    summary: 'Service objects and agreements support standalone-capable service orders; dispatch recurs, while service-order invoices and subscription fees remain separate outcomes.',
     module: 'Service',
     stages: [
       {
+        id: 'installed-base',
+        title: 'Service Objects (Installed Base)',
+        description: 'Maintain the customer assets or products that can receive service, and their service-object relations; this setup exists independently of a service order.',
+        roles: ['Service'],
+        menuPaths: ['Service management > Setup > Service objects > Service objects (Unverified)'],
+        docs: [
+          {
+            title: 'Service objects overview',
+            url: 'https://learn.microsoft.com/en-us/dynamics365/supply-chain/service-management/service-objects'
+          }
+        ],
+        pitfalls: ['Do not equate every service object with an inventory item or make setup mandatory for non-asset service orders.'],
+        prerequisites: ['For inventory-linked tangible objects, the released item and relevant inventory dimensions; not required for intangible or non-inventory objects.'],
+        tables: ['SMAServiceObjectTable', 'SMAServiceObjectRelation'],
+        relations: [],
+        optional: true
+      },
+      {
         id: 'agreement',
-        title: 'Service Agreement',
-        description: 'Define coverage, SLA, and billing rules.',
+        title: 'Service Agreements',
+        description: 'Define project-backed service coverage, agreement group, validity, and work lines; an agreement can generate service orders but is not required for every order.',
         roles: ['Service'],
         menuPaths: ['Service management > Service agreements'],
         docs: [
@@ -2380,23 +2398,66 @@ export const flows: Flow[] = [
             url: 'https://learn.microsoft.com/dynamics365/supply-chain/service-management/service-agreements'
           }
         ],
-        pitfalls: ['Coverage group not set', 'Subscription timing wrong'],
-        prerequisites: ['Service agreements', 'Billing rules'],
-        tables: ['SMASubscriptionTable', 'SMAAgreementTable', 'SMAAgreementLine', 'CustTable'],
+        pitfalls: ['Service agreement group is missing', 'Agreement or line is suspended/stopped', 'Validity period does not cover the generated order'],
+        prerequisites: ['Project', 'Service agreement group', 'Service-object/item setup when coverage is object-specific'],
+        tables: ['SMAAgreementTable', 'SMAAgreementLine'],
         relations: [
           {
             from: 'SMAAgreementLine',
             to: 'SMAAgreementTable',
-            fields: ['SMAAgreementLine.AgreementId → SMAAgreementTable.AgreementId'],
-            note: 'Lines belong to their agreement header',
+            fields: ['SMAAgreementLine.AgreementId = SMAAgreementTable.AgreementId'],
+            badge: 'declared FK',
+            note: 'Composition — agreement line belongs to the agreement header.'
           },
+          {
+            from: 'SMAAgreementLine',
+            to: 'SMAServiceObjectRelation',
+            fields: ['SMAAgreementLine.ServiceObjectRelationId = SMAServiceObjectRelation.ServiceObjectRelationId'],
+            badge: 'declared FK',
+            note: 'Association — identifies the covered service-object relation.'
+          },
+          {
+            from: 'SMAAgreementLine',
+            to: 'SMAServiceObjectTable',
+            fields: ['SMAAgreementLine.ServiceObjectId = SMAServiceObjectTable.ServiceObjectId'],
+            badge: 'declared FK',
+            note: 'Association — identifies the service object covered by the line.'
+          },
+          {
+            from: 'SMAAgreementLine',
+            to: 'SMAServiceTask',
+            fields: ['SMAAgreementLine.ServiceTaskId = SMAServiceTask.ServiceTaskId'],
+            badge: 'declared FK',
+            note: 'Association — classifies the agreement work. Endpoint only; no chip, no tableDef.'
+          },
+          {
+            from: 'SMAAgreementLine',
+            to: 'ProjTable',
+            fields: ['SMAAgreementLine.ProjId = ProjTable.ProjId'],
+            badge: 'declared FK',
+            note: 'Association — project used for agreement-line posting.'
+          },
+          {
+            from: 'SMAAgreementLine',
+            to: 'InventTable',
+            fields: ['SMAAgreementLine.ItemId = InventTable.ItemId'],
+            badge: 'declared FK',
+            note: 'Association — item for item-type agreement work.'
+          },
+          {
+            from: 'SMAAgreementTable',
+            to: 'SMAServiceObjectRelation',
+            fields: ['SMAAgreementTable.AgreementId = SMAServiceObjectRelation.RelKeyId'],
+            badge: 'conditional FK — requires SMAServiceObjectRelation.RelTableId = tableNum(SMAAgreementTable)',
+            note: 'Association — polymorphic service-object relation. RelTableId (system field) discriminates the owning table, so the agreement link applies only when RelTableId is SMAAgreementTable; the key is stored in RelKeyId.'
+          }
         ],
-        approvals: ['Agreement approval (optional)']
+        optional: true
       },
       {
         id: 'service-order',
         title: 'Service Orders',
-        description: 'Create orders, assign items/hours, schedule.',
+        description: 'Create a customer-site service visit with one or more hour, item, expense, or fee lines. Orders can originate from an agreement or be created individually; this is the operational hub.',
         roles: ['Service'],
         menuPaths: ['Service management > Service orders'],
         docs: [
@@ -2405,73 +2466,122 @@ export const flows: Flow[] = [
             url: 'https://learn.microsoft.com/dynamics365/supply-chain/service-management/service-orders'
           }
         ],
-        pitfalls: ['Service item not linked', 'Contract lines missing'],
-        prerequisites: ['Service items', 'Technician resources'],
-        tables: ['SMAServiceOrderTable', 'SMAServiceOrderLine', 'SMAServiceObjectTable', 'SMAAgreementLine'],
+        pitfalls: ['Do not require an agreement for a one-time order', 'Item requirements require a project', 'Do not treat service-order invoice lines as a direct CustInvoiceTrans join'],
+        prerequisites: ['Customer and project context', 'An agreement and applicable agreement period only when agreement-linked', 'Service-object setup only when servicing an identified object'],
+        tables: ['SMAServiceOrderTable', 'SMAServiceOrderLine', 'CustTable'],
         relations: [
           {
-            from: 'SMAServiceOrderLine',
-            to: 'SMAAgreementLine',
-            fields: ['SMAServiceOrderLine.AgreementId = SMAAgreementLine.AgreementId', 'SMAServiceOrderLine.AgreementLineNum = SMAAgreementLine.AgreementLineNum'],
-            note: 'Lines consume agreement coverage',
+            from: 'SMAServiceOrderTable',
+            to: 'SMAAgreementTable',
+            fields: ['SMAServiceOrderTable.AgreementId = SMAAgreementTable.AgreementId'],
+            badge: 'declared FK',
+            note: 'Association — originating agreement when present. Standalone orders leave this empty.'
+          },
+          {
+            from: 'SMAServiceOrderTable',
+            to: 'CustTable',
+            fields: ['SMAServiceOrderTable.CustAccount = CustTable.AccountNum'],
+            badge: 'declared FK',
+            note: 'Association — customer receiving service.'
+          },
+          {
+            from: 'SMAServiceOrderTable',
+            to: 'ProjTable',
+            fields: ['SMAServiceOrderTable.ProjId = ProjTable.ProjId'],
+            badge: 'declared FK',
+            note: 'Association — project context for service-order posting.'
+          },
+          {
+            from: 'SMAServiceOrderTable',
+            to: 'SMAStageTable',
+            fields: ['SMAServiceOrderTable.StageId = SMAStageTable.StageId'],
+            badge: 'declared FK',
+            note: 'Association — current order stage.'
           },
           {
             from: 'SMAServiceOrderLine',
-            to: 'SMAServiceObjectTable',
-            fields: ['SMAServiceOrderLine.ServiceObjectId = SMAServiceObjectTable.ServiceObjectId'],
-            note: 'Lines reference service objects/assets',
+            to: 'SMAServiceOrderTable',
+            fields: ['SMAServiceOrderLine.ServiceOrderId = SMAServiceOrderTable.ServiceOrderId'],
+            badge: 'declared FK',
+            note: 'Composition — each line belongs to its service-order header.'
           },
-        ],
+          {
+            from: 'SMAAgreementLine',
+            to: 'SMAServiceOrderLine',
+            fields: ['SMAAgreementLine.AgreementId = SMAServiceOrderLine.AgreementId', 'SMAAgreementLine.AgreementLineNum = SMAServiceOrderLine.AgreementLineNum'],
+            badge: 'conditional FK — requires agreement linkage (AgreementId + AgreementLineNum populated)',
+            note: 'Association — declared on SMAAgreementLine pointing to SMAServiceOrderLine. Applies only to agreement-based orders; standalone service orders carry no agreement line.'
+          }
+        ]
       },
       {
         id: 'dispatch',
-        title: 'Dispatch',
-        description: 'Schedule technicians and manage visits.',
+        title: 'Dispatch and Monitor',
+        description: 'Use the dispatch board to review service-activity status, assigned workers, service times, and activities not yet dispatched; this is recurring monitoring/scheduling, not a one-time transaction gate.',
         roles: ['Service'],
         menuPaths: ['Service management > Periodic tasks > Dispatch board'],
         docs: [
           {
             title: 'Dispatch board',
-            url: 'https://learn.microsoft.com/dynamics365/supply-chain/service-management/dispatch-board'
+            url: 'https://learn.microsoft.com/en-us/dynamics365/supply-chain/service-management/dispatch-board'
           }
         ],
-        pitfalls: ['Calendar not set', 'Travel time not considered'],
-        prerequisites: ['Resource calendars', 'Skills/skills mapping'],
-        tables: ['SMAServiceOrderTable', 'SMADispatchTeamTable', 'WrkCtrTable', 'ResResourceIdentifier'],
+        pitfalls: ['Do not make dispatch a mandatory predecessor to every billing action; the board is revisited as activities change.', 'Microsoft Learn spells this menu "Perform periodic tasks"; this index uses "Periodic tasks" — same board, different wording.'],
+        prerequisites: ['Service activities exist', 'Dispatch-team worker assignments and technician availability are maintained'],
+        tables: ['SMAServiceOrderTable', 'SMADispatchTeamTable', 'SMADispatchWorkerSetup', 'WrkCtrTable', 'ResResourceIdentifier'],
         relations: [
           {
             from: 'SMADispatchWorkerSetup',
             to: 'SMADispatchTeamTable',
             fields: ['SMADispatchWorkerSetup.DispatchTeamId = SMADispatchTeamTable.DispatchTeamId'],
-            note: 'Dispatch teams group technicians; workers are assigned to dispatch teams via SMADispatchWorkerSetup',
-          },
+            badge: 'declared FK',
+            note: 'Association — worker/team assignment. DispatchTeamDataAreaId carries company context.'
+          }
         ],
+        optional: true
       },
       {
         id: 'service-bill',
-        title: 'Bill Service',
-        description: 'Invoice time/materials and subscriptions.',
+        title: 'Invoice Service Orders',
+        description: 'Complete and post service-order transactions through the associated project/service invoicing process. Keep this outcome separate from recurring subscription-fee billing.',
         roles: ['Service', 'AR'],
         menuPaths: ['Service management > Service orders > Service invoices'],
+        docs: [
+          {
+            title: 'Service orders',
+            url: 'https://learn.microsoft.com/dynamics365/supply-chain/service-management/service-orders'
+          }
+        ],
+        pitfalls: ['Do not add a direct SMAServiceOrderLine > CustInvoiceTrans row without a probe', 'Do not include subscription fees here'],
+        prerequisites: ['Completed service-order lines and project context', 'Required posting setup'],
+        tables: ['SMAServiceOrderTable', 'SMAServiceOrderLine', 'CustInvoiceTrans'],
+        relations: [],
+        approvals: ['Invoice approval workflow (optional)'],
+        optional: true
+      },
+      {
+        id: 'subscription-billing',
+        title: 'Service Subscription Fees',
+        description: 'Maintain subscriptions and their recurring fee periods as a separate project-based invoicing stream; the fee transactions are invoiced to the customer.',
+        roles: ['Service', 'AR'],
+        menuPaths: ['Service management > Service subscriptions'],
         docs: [
           {
             title: 'Service subscriptions',
             url: 'https://learn.microsoft.com/dynamics365/supply-chain/service-management/service-subscriptions'
           }
         ],
-        pitfalls: ['Posting profiles missing', 'Subscription period misaligned'],
-        prerequisites: ['Posting profiles', 'Subscription setup'],
-        tables: ['SMAServiceOrderTable', 'SMAServiceOrderLine', 'CustInvoiceTrans', 'SMASubscriptionTable'],
-        relations: [
-
-        ],
-        approvals: ['Invoice approval workflow (optional)']
+        pitfalls: ['The subscription group period code determines fee intervals; do not conflate subscription fees with service-order lines or invent an unverified fee-transaction table.'],
+        prerequisites: ['Time-and-materials project and service subscription group/period code'],
+        tables: ['SMASubscriptionTable'],
+        relations: [],
+        optional: true
       }
     ],
     edges: [
       { from: 'agreement', to: 'service-order' },
       { from: 'service-order', to: 'dispatch' },
-      { from: 'dispatch', to: 'service-bill' }
+      { from: 'service-order', to: 'service-bill' }
     ]
   }
 ]
@@ -6536,6 +6646,13 @@ export const tableDefs: Record<string, TableDef> = {
       { name: "GroupBy", type: "int32", note: "Enum – controls how agreement lines are grouped into service orders (per line, task, or object)" },
       { name: "WorkerServiceResponsible", type: "string", note: "FK → HcmWorker – default responsible technician" },
       { name: "ServiceLevelAgreementId", type: "string", note: "FK → SMAServiceLevelAgreementTable; nullable" },
+      { name: "ActivityTypeId", type: "String", note: "FK → smmActivityTypeGroup – activity type stamped on the CRM activity for the agreement." },
+      { name: "AgreementDescription", type: "String", note: "Free-text description of the agreement, shown on agreement lists." },
+      { name: "ContactPersonId", type: "String", note: "FK → ContactPerson – customer contact for the visit." },
+      { name: "ContinuousService_IN", type: "Enum", note: "NoYes – India continuous-service indicator consumed by the service tax rules." },
+      { name: "ServiceEventGroup_IN", type: "String", note: "India service-event group code consumed by the service tax rules." },
+      { name: "TemplateGroupId", type: "String", note: "FK → SMATemplateGroup – default task/object template applied to orders generated from the agreement." },
+      { name: "WorkerPreferredTechnician", type: "Int64", note: "FK → HcmWorker – customer-preferred technician; nullable." },
     ],
   },
 
@@ -6556,6 +6673,26 @@ export const tableDefs: Record<string, TableDef> = {
       { name: "ServiceTaskId", type: "string", note: "FK → SMAServiceTask – work task classification; nullable" },
       { name: "Worker", type: "string", note: "FK → HcmWorker – assigned technician for this line; nullable" },
       { name: "Suspended", type: "int32", note: "NoYes – stops auto-generation of orders for this specific line" },
+      { name: "ActivityNumber", type: "String", note: "FK → smmActivities – CRM activity created for the line; nullable." },
+      { name: "DefaultDimension", type: "Int64", note: "FK → DimensionAttributeValueSet – financial dimensions stamped on the posted line." },
+      { name: "Description", type: "String", note: "Free-text order description shown on the order and the dispatch board." },
+      { name: "DescriptionService", type: "String", note: "Service description printed on the service report for this line." },
+      { name: "EndDate", type: "Date", note: "Date the line coverage ends; nullable." },
+      { name: "InventDimId", type: "String", note: "FK → InventDim – inventory dimensions for an item-type line; nullable." },
+      { name: "ItemId", type: "String", note: "FK → InventTable – item serviced by an item-type line; nullable." },
+      { name: "ItemSetupType", type: "Enum", note: "Enum SMAItemSetupType – how the item is set up on the line (standard item or BOM template)." },
+      { name: "ProjCurrencyId", type: "String", note: "FK → Currency – sales currency used for project posting." },
+      { name: "ProjLinePropertyId", type: "String", note: "FK → ProjLineProperty – line property that drives billable/chargeable handling." },
+      { name: "ProjTaxGroupId", type: "String", note: "FK → TaxGroupHeading – sales tax group for posting." },
+      { name: "ProjTaxItemGroupId", type: "String", note: "FK → TaxItemGroupHeading – item sales tax group for posting." },
+      { name: "ProjTransTxt", type: "String", note: "Transaction text written on the project transaction." },
+      { name: "Qty", type: "Real", note: "Quantity covered per interval (hours or units, per TransactionType)." },
+      { name: "ServiceObjectId", type: "String", note: "FK → SMAServiceObjectTable – service object worked on; nullable." },
+      { name: "ServiceTimeEndBefore", type: "Time", note: "Latest time of day the work must finish; nullable." },
+      { name: "ServiceTimeStartAfter", type: "Time", note: "Earliest time of day the work may start; nullable." },
+      { name: "StartDate", type: "Date", note: "Date the line coverage starts." },
+      { name: "TimeAgreementId", type: "String", note: "FK → SMATimeAgreement – time agreement constraining the allowed service window." },
+      { name: "Unit", type: "String", note: "FK → UnitOfMeasure – unit of measure for Qty." },
     ],
   },
 
@@ -6575,6 +6712,25 @@ export const tableDefs: Record<string, TableDef> = {
       { name: "Priority", type: "Enum", note: "Enum – order priority level; nullable" },
       { name: "WorkerResponsible", type: "Int64", note: "FK → HcmWorker – technician responsible for the order; nullable" },
       { name: "SignOff", type: "Enum", note: "NoYes – whether the order has been signed off by the technician" },
+      { name: "ActivityNumber", type: "String", note: "FK → smmActivities – CRM activity created for the line; nullable." },
+      { name: "ActivityTypeId", type: "String", note: "FK → smmActivityTypeGroup – activity type stamped on the CRM activity for the agreement." },
+      { name: "AddressRefRecId", type: "Int64", note: "Surrogate key of the order address record; interpreted through AddressRefTableId." },
+      { name: "AddressRefTableId", type: "Int", note: "Table id of the order address record; with AddressRefRecId forms a polymorphic address pointer." },
+      { name: "CalendarConflict", type: "Enum", note: "NoYes – the service time conflicts with the technician calendar." },
+      { name: "CertifiedPayroll", type: "Enum", note: "NoYes – the order falls under certified-payroll reporting." },
+      { name: "Compliance", type: "Real", note: "Service-level-agreement compliance percentage recorded for the order." },
+      { name: "ContactPersonId", type: "String", note: "FK → ContactPerson – customer contact for the visit." },
+      { name: "Description", type: "String", note: "Free-text order description shown on the order and the dispatch board." },
+      { name: "IncomingWebOrder", type: "Enum", note: "NoYes – the order arrived through the web channel." },
+      { name: "Origin", type: "Enum", note: "Enum SMAServiceOrderOrigin – how the parent order was created." },
+      { name: "Progress", type: "Enum", note: "Enum SMAServiceOrderProgress – progress of the order through its stages." },
+      { name: "ServiceAddressName", type: "String", note: "Name on the address where the service is performed." },
+      { name: "ServiceLevelAgreement", type: "String", note: "FK → SMAServiceLevelAgreementTable – SLA applied to this order; nullable." },
+      { name: "ServiceLevelAgreementStatus", type: "Enum", note: "Enum SMALogStatus – current SLA status of the order." },
+      { name: "ServicePostalAddress", type: "Int64", note: "FK → LogisticsPostalAddress – postal address where the service is performed." },
+      { name: "SignOffDateTime", type: "UtcDateTime", note: "UTC timestamp the customer signed off the work." },
+      { name: "WorkerPreferredTechnician", type: "Int64", note: "FK → HcmWorker – customer-preferred technician; nullable." },
+      { name: "SysRowVersionNumber", type: "Int64", note: "Internal row-version token used for optimistic concurrency." },
     ],
   },
 
@@ -6595,6 +6751,67 @@ export const tableDefs: Record<string, TableDef> = {
       { name: "DateExecution", type: "date", note: "Actual date the service was performed; nullable" },
       { name: "Qty", type: "decimal", note: "Quantity (hours, units, etc.)" },
       { name: "AgreementId", type: "string", note: "FK → SMAAgreementTable – originating agreement line; nullable, readonly" },
+      { name: "ProjCurrencyCode", type: "String", note: "FK → Currency – sales currency used for project posting." },
+      { name: "ActivityNumber", type: "String", note: "FK → smmActivities – CRM activity created for the line; nullable." },
+      { name: "AgreementLineNum", type: "Int", note: "Agreement line number the order line consumes; populated only for agreement-based orders." },
+      { name: "CurrencyIdCost", type: "String", note: "FK → Currency – cost currency of the line." },
+      { name: "DateCalculated", type: "Date", note: "Date the line price/qty was last calculated." },
+      { name: "DateRangeFrom", type: "Date", note: "Start of the date range the line covers; nullable." },
+      { name: "DateRangeTo", type: "Date", note: "End of the date range the line covers; nullable." },
+      { name: "DefaultDimension", type: "Int64", note: "FK → DimensionAttributeValueSet – financial dimensions stamped on the posted line." },
+      { name: "Description", type: "String", note: "Free-text order description shown on the order and the dispatch board." },
+      { name: "DescriptionService", type: "String", note: "Service description printed on the service report for this line." },
+      { name: "InvoiceId", type: "String", note: "Invoice identifier stamped when the line is invoiced." },
+      { name: "IsSalesPriceModified", type: "Enum", note: "NoYes – sales price was overridden from the project price." },
+      { name: "LedgerDimension", type: "Int64", note: "FK → DimensionAttributeValueCombination – main account and dimensions for expense posting." },
+      { name: "OffsetAccountTypeExpense", type: "Enum", note: "Enum LedgerJournalACType – account type of the offset account for expense lines." },
+      { name: "Origin", type: "Enum", note: "Enum SMAServiceOrderOrigin – how the parent order was created." },
+      { name: "ProjCostPrice", type: "Real", note: "Cost price per unit for project posting." },
+      { name: "ProjId", type: "String", note: "FK → ProjTable – project the line posts cost and revenue to." },
+      { name: "ProjLinePropertyId", type: "String", note: "FK → ProjLineProperty – line property that drives billable/chargeable handling." },
+      { name: "ProjSalesPrice", type: "Real", note: "Sales price per unit for project posting." },
+      { name: "ProjTaxGroup", type: "String", note: "FK → TaxGroupHeading – sales tax group for posting." },
+      { name: "ProjTaxItemGroup", type: "String", note: "FK → TaxItemGroupHeading – item sales tax group for posting." },
+      { name: "ProjTransId", type: "String", note: "Project transaction id created when the line is posted." },
+      { name: "ProjTransTxt", type: "String", note: "Transaction text written on the project transaction." },
+      { name: "ServiceObjectId", type: "String", note: "FK → SMAServiceObjectTable – service object worked on; nullable." },
+      { name: "ServiceOrderStatus", type: "Enum", note: "Enum SMAServiceOrderStatus – line-level status (created, posted, invoiced, cancelled)." },
+      { name: "ServiceTaskId", type: "String", note: "FK → SMAServiceTask – work task classification for the line; nullable." },
+      { name: "ServiceTimeEndBefore", type: "Time", note: "Latest time of day the work must finish; nullable." },
+      { name: "ServiceTimeStartAfter", type: "Time", note: "Earliest time of day the work may start; nullable." },
+      { name: "SignOff", type: "Enum", note: "NoYes – the line has been signed off (customer sign-off or automatic on posting)." },
+      { name: "TaxGroupExpense", type: "String", note: "FK → TaxGroupHeading – sales tax group used for expense-type lines." },
+      { name: "TaxItemGroupExpense", type: "String", note: "FK → TaxItemGroupHeading – item sales tax group used for expense-type lines." },
+      { name: "TimeSheetEndTime", type: "Time", note: "Time of day the technician finished the work; feeds hour-journal posting." },
+      { name: "TimeSheetStartTime", type: "Time", note: "Time of day the technician started the work; feeds hour-journal posting." },
+      { name: "TransactionType", type: "Enum", note: "Enum SMATransactionType – line type: hour, item, expense, or fee." },
+      { name: "Unit", type: "String", note: "FK → UnitOfMeasure – unit of measure for Qty." },
+      { name: "Worker", type: "Int64", note: "FK → HcmWorker – worker assigned to the dispatch team." },
+      { name: "PackedExtensions", type: "Container", note: "Serialized SysExtension payload for line extensions; not a business field." },
+      { name: "AssessableValue_IN", type: "Real", note: "India GST – assessable value of the line used as the tax base." },
+      { name: "CompanyLocation_IN", type: "Int64", note: "India GST – location (address record) of the company for place-of-supply determination." },
+      { name: "CustomerLocation_IN", type: "Int64", note: "India GST – location (address record) of the customer for place-of-supply determination." },
+      { name: "CustomerTaxInformation_IN", type: "Int64", note: "India GST – customer tax registration record used on the tax document." },
+      { name: "CustomsTariffCodeTable_IN", type: "Int64", note: "India – customs tariff code applied to the line." },
+      { name: "DirectSettlement_IN", type: "Enum", note: "Enum – India direct-settlement flag for the excise invoice." },
+      { name: "DSA_IN", type: "Enum", note: "NoYes – India dealer-sales-account flag." },
+      { name: "ExciseRecordType_IN", type: "Enum", note: "Enum – India excise record type for the line." },
+      { name: "ExciseTariffCodes_IN", type: "Int64", note: "India – excise tariff code record for the line." },
+      { name: "ExciseType_IN", type: "Enum", note: "Enum – India excise type (manufacture or trading)." },
+      { name: "Exempt_IN", type: "Enum", note: "NoYesId – line is exempt from India GST." },
+      { name: "HSNCodeTable_IN", type: "Int64", note: "India GST – HSN/SAC code record for the line." },
+      { name: "ITCCategory_IN", type: "Enum", note: "Enum – India input-tax-credit category for the line." },
+      { name: "MaximumRetailPrice_IN", type: "Real", note: "India GST – maximum retail price printed on the package." },
+      { name: "PostalAddress_IN", type: "Int64", note: "India GST – postal address record used for the tax document." },
+      { name: "SalesTaxFormTypes_IN", type: "Int64", note: "India – sales tax form type attached to the line." },
+      { name: "ServiceAccountingCodeTable_IN", type: "Int64", note: "India GST – service accounting code (SAC) record for the line." },
+      { name: "ServiceCodeTable_IN", type: "Int64", note: "India – service code record for the line." },
+      { name: "TaxInventVATCommodityCodeId_IN", type: "String", note: "India – VAT commodity code for the item on the line." },
+      { name: "TCSGroup_IN", type: "String", note: "India – tax-collected-at-source group applied to the line." },
+      { name: "TDSGroup_IN", type: "String", note: "India – tax-deducted-at-source group applied to the line." },
+      { name: "VendorLocation_IN", type: "Int64", note: "India GST – vendor location record used when the line originates from an external vendor." },
+      { name: "VendorTaxInformation_IN", type: "Int64", note: "India GST – vendor tax registration record used on the tax document." },
+      { name: "WarehouseLocation_IN", type: "Int64", note: "India GST – warehouse location record for the line." },
     ],
   },
 
@@ -6628,6 +6845,7 @@ export const tableDefs: Record<string, TableDef> = {
       { name: "InventDimId", type: "string", note: "FK → InventDim – serial/batch dimension for the object instance; nullable" },
       { name: "TemplateBOMId", type: "string", note: "FK → SMATemplateBOMTable – may override the object's default template; nullable" },
       { name: "SalesId", type: "string", note: "FK → SalesTable – if object originated from a sales order; readonly, nullable" },
+      { name: "ServiceObjectRef", type: "String", note: "Free-text reference for the object as the customer knows it (tag, serial, location); another table can be the owner instead, discriminated by RelTableId." },
     ],
   },
 
@@ -6706,6 +6924,8 @@ export const tableDefs: Record<string, TableDef> = {
       { name: "ProjCategoryId", type: "string", note: "FK → ProjCategory – fee category for subscription revenue posting" },
       { name: "StartDate", type: "date", note: "Subscription start date (readonly, computed); nullable" },
       { name: "LatestEnddate", type: "date", note: "Latest computed end date of all fee transactions (readonly); nullable" },
+      { name: "SubscriptionIndex", type: "Real", note: "Index that orders subscriptions inside a subscription group." },
+      { name: "TaxInformation_IN", type: "Int64", note: "India GST – tax registration record used when invoicing the subscription fee." },
     ],
   },
 
@@ -7786,8 +8006,20 @@ export const tableDefs: Record<string, TableDef> = {
     description: "Resource identifier — maps a project/operations resource to the record it represents via a generic (RefTableId, RefRecId) pair. A resource can point at a worker (HcmWorker), a machine or work centre (WrkCtrTable), or another resource table; this indirection is what lets one resource pool mix people and equipment.",
     module: "Project Management and Accounting",
     fields: [
-      { name: "RefRecId", type: "Int64", fkTarget: "WrkCtrTable.RecId", note: "Surrogate key of the underlying record the resource stands for." },
+      { name: "RefRecId", type: "Int64", note: "Surrogate key of the underlying record the resource stands for; which table it points at is decided by RefTableId, so it must not be narrowed to one target." },
       { name: "RefTableId", type: "Int", note: "Table id of the underlying record; together with RefRecId forms the polymorphic resource pointer." },
+    ],
+  },
+
+  SMADispatchWorkerSetup: {
+    name: "SMADispatchWorkerSetup",
+    description: "Dispatch worker setup — assigns a worker to a dispatch team inside a company. This is the worker↔team bridge the dispatch board reads when it lists the technicians available for a team's service activities; the team's owner sits on SMADispatchTeamTable.",
+    module: "Service Management",
+    fields: [
+      { name: "RecId", type: "Int64", note: "PK – surrogate key" },
+      { name: "DispatchTeamDataAreaId", type: "String", note: "Company (legal entity) the assignment belongs to; part of the alternate key with DispatchTeamId and Worker." },
+      { name: "DispatchTeamId", type: "String", fkTarget: "SMADispatchTeamTable.DispatchTeamId", note: "FK → SMADispatchTeamTable.DispatchTeamId – team the worker belongs to." },
+      { name: "Worker", type: "Int64", fkTarget: "HcmWorker.RecId", note: "FK → HcmWorker – worker assigned to the dispatch team." },
     ],
   },
 
