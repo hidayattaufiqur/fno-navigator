@@ -1712,160 +1712,281 @@ export const flows: Flow[] = [
   {
     id: 'rtr',
     title: 'Record to Report',
-    summary: 'Journal, allocate, consolidate, and close periods.',
+    summary: 'Set up the ledger, post daily and period-end journals, complete applicable revaluation, allocation, bank reconciliation, consolidation and reporting work, then control period and year-end close separately.',
     module: 'Finance',
     stages: [
       {
         id: 'gl-setup',
         title: 'GL & Calendar Setup',
-        description: 'Ledger, currency, periods, and dimensions.',
+        description: "Set up the legal-entity ledger's chart of accounts, main accounts, account structures, currencies, fiscal calendar, and financial dimensions that govern posting.",
         roles: ['Controller'],
-        menuPaths: ['General ledger > Setup > Ledger'],
+        menuPaths: ['General ledger > Ledger setup > Ledger'],
         docs: [
           {
             title: 'Plan your chart of accounts',
             url: 'https://learn.microsoft.com/dynamics365/finance/general-ledger/plan-chart-of-accounts'
           }
         ],
-        pitfalls: ['Ledger calendar closed', 'Posting layers misused'],
-        prerequisites: ['Ledger, calendars, currencies', 'Dimensions'],
-        tables: ['Ledger', 'FiscalCalendar', 'Currency', 'DimensionHierarchy', 'DimensionAttributeValueCombination', 'CompanyInfo', 'OMOperatingUnit'],
+        pitfalls: ['Ledger assigned to the wrong chart of accounts or fiscal calendar', 'Account structure or dimension setup does not permit the intended postings'],
+        prerequisites: ['Legal entity ledger', 'Chart of accounts and main accounts', 'Account structures and financial dimensions', 'Fiscal calendar and currencies'],
+        tables: ['Ledger', 'LedgerChartOfAccounts', 'MainAccount', 'FiscalCalendar', 'FiscalCalendarPeriod', 'Currency', 'DimensionHierarchy', 'DimensionAttributeValueCombination', 'CompanyInfo'],
         relations: [
           {
             from: 'MainAccount',
             to: 'LedgerChartOfAccounts',
-            fields: ['MainAccount.LedgerChartOfAccounts → LedgerChartOfAccounts.RecId'],
-            note: 'Each main account belongs to exactly one chart of accounts',
+            badge: 'declared FK',
+            note: 'Main account belongs to its chart of accounts.',
+            fields: ['MainAccount.LedgerChartOfAccounts = LedgerChartOfAccounts.RecId']
           },
           {
             from: 'Ledger',
             to: 'LedgerChartOfAccounts',
-            fields: ['Ledger.ChartOfAccounts → LedgerChartOfAccounts.RecId'],
-            note: 'A legal entity ledger is assigned to one chart of accounts; chart can be shared across entities',
-          },
-          {
-            from: 'FiscalCalendarPeriod',
-            to: 'FiscalCalendar',
-            fields: ['FiscalCalendarPeriod.FiscalCalendar → FiscalCalendar.RecId'],
-            note: 'Each accounting period belongs to a fiscal calendar',
+            badge: 'declared FK',
+            note: 'The legal-entity ledger selects a chart of accounts.',
+            fields: ['Ledger.ChartOfAccounts = LedgerChartOfAccounts.RecId']
           },
           {
             from: 'Ledger',
             to: 'FiscalCalendar',
-            fields: ['Ledger.FiscalCalendar → FiscalCalendar.RecId'],
-            note: 'Legal entity ledger references its fiscal calendar, governing which periods are available for posting',
+            badge: 'declared FK',
+            note: 'The ledger uses this fiscal calendar.',
+            fields: ['Ledger.FiscalCalendar = FiscalCalendar.RecId']
           },
           {
             from: 'Ledger',
             to: 'CompanyInfo',
-            fields: ['Ledger.PrimaryForLegalEntity = CompanyInfo.RecId'],
-            note: 'Legal entity configuration record - each legal entity ledger record binds to its CompanyInfo record',
-          },
-          {
-            from: 'DimensionAttributeValue',
-            to: 'OMOperatingUnit',
-            fields: ['DimensionAttributeValue.EntityInstance = OMOperatingUnit.RecId'],
-            note: 'Generic operating unit table - used as financial dimension values for BusinessUnit, Department, CostCenter, and similar org unit types (polymorphic relation)',
+            badge: 'declared FK',
+            note: 'The ledger is associated with its legal-entity company record.',
+            fields: ['Ledger.PrimaryForLegalEntity = CompanyInfo.RecId']
           },
         ],
       },
       {
         id: 'journals',
-        title: 'Journals & Allocations',
-        description: 'Daily journals and allocation rules.',
+        title: 'Daily Journals',
+        description: 'Create, validate, and post routine general journals using ledger accounts and dimensions; distinguish journal lines from the posted general-journal entry and account entries.',
         roles: ['Controller'],
-        menuPaths: ['General ledger > Journal entries > General journal'],
+        menuPaths: ['General ledger > Journal entries > General journals'],
         docs: [
           {
             title: 'Ledger and subledger accounting overview',
             url: 'https://learn.microsoft.com/dynamics365/finance/general-ledger/ledger-subledger'
           }
         ],
-        pitfalls: ['Approval workflow missing', 'Posting profile errors'],
-        prerequisites: ['Journal names', 'Approval workflow (optional)'],
-        tables: ['LedgerJournalTable', 'LedgerJournalTrans', 'LedgerAllocationRule', 'SubledgerVoucherGeneralJournalEntry', 'GeneralJournalEntry', 'GeneralJournalAccountEntry'],
+        pitfalls: ['Journal is unbalanced or has an invalid account/dimension combination', 'Posting date falls in a period that is not open', 'Required journal approval is incomplete'],
+        prerequisites: ['Ledger and chart of accounts configured', 'Journal names', 'Posting period open for the posting date'],
+        tables: ['LedgerJournalTable', 'LedgerJournalTrans', 'SubledgerVoucherGeneralJournalEntry', 'GeneralJournalEntry', 'GeneralJournalAccountEntry', 'DimensionAttributeValueCombination'],
         relations: [
-          { from: 'LedgerJournalTrans', to: 'LedgerJournalTable', note: 'Lines tied to journal header', fields: ['LedgerJournalTrans.JournalNum → LedgerJournalTable.JournalNum'] },
+          {
+            from: 'LedgerJournalTrans',
+            to: 'LedgerJournalTable',
+            badge: 'declared FK',
+            note: 'Journal lines belong to the journal header.',
+            fields: ['LedgerJournalTrans.JournalNum = LedgerJournalTable.JournalNum']
+          },
           {
             from: 'LedgerJournalTrans',
             to: 'SubledgerVoucherGeneralJournalEntry',
-            note: 'Posting creates the subledger voucher that resolves to the GL journal header; the account lives on LedgerJournalTrans.LedgerDimension, not as an account number on the posted entry',
-            fields: ['LedgerJournalTrans.Voucher → SubledgerVoucherGeneralJournalEntry.Voucher']
+            badge: 'field match — not a declared FK',
+            note: 'Voucher value match only; standard metadata has no declared relation for this pair.',
+            fields: ['LedgerJournalTrans.Voucher = SubledgerVoucherGeneralJournalEntry.Voucher']
+          },
+          {
+            from: 'SubledgerVoucherGeneralJournalEntry',
+            to: 'GeneralJournalEntry',
+            badge: 'declared FK',
+            note: 'Declared relation; relationship_type is Aggregation.',
+            fields: ['SubledgerVoucherGeneralJournalEntry.GeneralJournalEntry = GeneralJournalEntry.RecId']
           },
           {
             from: 'GeneralJournalAccountEntry',
             to: 'GeneralJournalEntry',
-            fields: ['GeneralJournalAccountEntry.GeneralJournalEntry = GeneralJournalEntry.RecId'],
-            note: 'Each posted GL voucher creates one GeneralJournalEntry header; GeneralJournalAccountEntry holds the debit/credit lines',
+            badge: 'declared FK',
+            note: 'Posted account-entry lines belong to the general-journal entry header.',
+            fields: ['GeneralJournalAccountEntry.GeneralJournalEntry = GeneralJournalEntry.RecId']
           },
           {
             from: 'GeneralJournalAccountEntry',
             to: 'DimensionAttributeValueCombination',
-            fields: ['GeneralJournalAccountEntry.LedgerDimension = DimensionAttributeValueCombination.RecId'],
-            note: 'Individual debit/credit line on a posted GL voucher; FK to GeneralJournalEntry header and to DimensionAttributeValueCombination for the ledger account',
+            badge: 'declared FK',
+            note: 'Declared relation; relationship_type is Association.',
+            fields: ['GeneralJournalAccountEntry.LedgerDimension = DimensionAttributeValueCombination.RecId']
           },
         ],
-        approvals: ['Journal approval workflow']
+        approvals: ['Journal approval workflow (only when configured)']
+      },
+      {
+        id: 'bank-reconciliation',
+        title: 'Bank Reconciliation',
+        description: 'Reconcile legal-entity bank transactions to the bank statement, clear matched transactions, enter statement-only fees or interest, and post when the unreconciled balance is zero.',
+        roles: ['Controller'],
+        menuPaths: ['Cash and bank management > Bank statement reconciliation > Bank reconciliation'],
+        docs: [
+          {
+            title: 'Reconcile a bank account',
+            url: 'https://learn.microsoft.com/dynamics365/finance/cash-bank-management/reconcile-bank-account'
+          }
+        ],
+        pitfalls: ['Pending-cancellation transactions block reconciliation', 'Unmatched transactions or statement-only entries leave a nonzero unreconciled balance', 'Reconciliation is cancelled or reversed out of chronological order'],
+        prerequisites: ['Bank account and bank statement details available', 'Bank transactions posted', 'Statement date and ending balance confirmed'],
+        tables: ['BankAccountTable', 'BankAccountTrans', 'LedgerJournalTable', 'LedgerJournalTrans'],
+        optional: true
+      },
+      {
+        id: 'period-adjustments',
+        title: 'Period-end Adjustments & Settlement',
+        description: 'Review period-end accruals and adjustments, post the required journals, and complete ledger-account settlement and journalizing where used.',
+        roles: ['Controller'],
+        menuPaths: ['General ledger > Journal entries > General journals'],
+        docs: [
+          {
+            title: 'Close the general ledger at period end',
+            url: 'https://learn.microsoft.com/dynamics365/finance/general-ledger/close-general-ledger-at-period-end'
+          }
+        ],
+        pitfalls: ['Adjusting entry posted to the wrong period', 'Required supporting schedules or balances are incomplete', 'Settlement or journalizing omitted where the organization uses it'],
+        prerequisites: ['Period-end balances reviewed', 'Required adjustment journals prepared', 'Target posting period open'],
+        tables: ['LedgerJournalTable', 'LedgerJournalTrans', 'GeneralJournalEntry', 'GeneralJournalAccountEntry']
+      },
+      {
+        id: 'fx-revaluation',
+        title: 'Foreign Currency Revaluation',
+        description: "Revalue eligible foreign-currency general-ledger balances at period end, review the unrealized gain/loss preview, and post or reverse the result. Use AR, AP, or Bank revaluation for those modules' open items; exclude those control accounts from GL revaluation when the subledger revaluation posts them.",
+        roles: ['Controller'],
+        menuPaths: ['General ledger > Periodic tasks > Foreign currency revaluation'],
+        docs: [
+          {
+            title: 'Foreign currency revaluation for General ledger',
+            url: 'https://learn.microsoft.com/dynamics365/finance/general-ledger/foreign-currency-revaluation-general-ledger'
+          }
+        ],
+        pitfalls: ['Wrong rate date or exchange-rate type', 'The same AR, AP, or Bank control balance is revalued both in its subledger and in GL', 'Preview, legal-entity scope, or posting result not reviewed'],
+        prerequisites: ['Foreign-currency rates and ledger revaluation accounts configured', 'Eligible main accounts marked for revaluation', 'Target posting period open'],
+        tables: ['Ledger', 'MainAccount', 'Currency', 'ExchangeRate', 'GeneralJournalEntry', 'GeneralJournalAccountEntry'],
+        optional: true
+      },
+      {
+        id: 'allocations',
+        title: 'Allocations',
+        description: 'Run configured ledger allocation rules for the period, review the generated allocation journal, and post it before final reporting.',
+        roles: ['Controller'],
+        menuPaths: ['General ledger > Allocations > Process allocation request'],
+        docs: [
+          {
+            title: 'Ledger allocation rules',
+            url: 'https://learn.microsoft.com/dynamics365/finance/general-ledger/ledger-allocation-rules'
+          }
+        ],
+        pitfalls: ['Wrong allocation basis or date interval', 'Destination account or dimension is invalid', 'Generated allocation journal is not reviewed or posted'],
+        prerequisites: ['Allocation rules and destination accounts/dimensions configured', 'Source balances available for allocation', 'Target posting period open'],
+        tables: ['LedgerAllocationRule', 'LedgerJournalTable', 'LedgerJournalTrans', 'GeneralJournalEntry', 'GeneralJournalAccountEntry'],
+        optional: true
       },
       {
         id: 'consol',
         title: 'Consolidation & Elimination',
-        description: 'Combine entities and eliminate intercompany.',
+        description: 'Consolidate selected legal entities using configured account mapping and currency translation; separately configure, run, and review elimination journals when required.',
         roles: ['Controller'],
-        menuPaths: ['General ledger > Consolidations'],
+        menuPaths: ['Consolidations > Consolidate online'],
         docs: [
           {
             title: 'Prepare a legal entity for the consolidation process',
             url: 'https://learn.microsoft.com/dynamics365/finance/general-ledger/prepare-company-for-consolidation'
           }
         ],
-        pitfalls: ['Currency translation setup wrong', 'Main account mapping missing'],
-        prerequisites: ['Consolidation group', 'Exchange rates', 'Account mappings'],
+        pitfalls: ['Source balances changed after consolidation and results were not rerun', 'Currency translation or account mapping is wrong', 'Intercompany elimination is assumed automatic or its journal is not reviewed and posted'],
+        prerequisites: ['Source and consolidation legal entities configured', 'Fiscal periods and currency rates available', 'Main-account mapping configured where charts differ', 'Elimination company and rules configured when eliminations are required'],
         tables: ['LedgerConsolidateTemplate', 'LedgerConsolidateHist', 'MainAccount', 'ExchangeRate'],
         relations: [
           {
             from: 'LedgerConsolidateHist',
             to: 'LedgerConsolidateTemplate',
+            badge: 'declared FK',
             fields: ['LedgerConsolidateHist.ConsolidateTemplate = LedgerConsolidateTemplate.RecId'],
-            note: 'Each consolidation run (history record) follows a consolidation template defining source legal entities, account mappings, and currency translation',
+            note: 'The consolidation history record identifies the template used. AOT declares an AxTableRelation with a Field constraint (`xml_type=\'\'`), not an AxTableRelationForeignKey element.',
+          },
+        ],
+        optional: true
+      },
+      {
+        id: 'financial-reporting',
+        title: 'Financial Reporting',
+        description: 'Generate and review period-end financial statements from posted ledger balances; use Financial reporting for multi-company reporting when appropriate, and distinguish it from the General ledger Consolidate online run.',
+        roles: ['Controller'],
+        menuPaths: ['General ledger > Inquiries and reports > Financial reports'],
+        docs: [
+          {
+            title: 'Financial reporting overview',
+            url: 'https://learn.microsoft.com/dynamics365/finance/general-ledger/financial-reporting-getting-started'
+          }
+        ],
+        pitfalls: ['Statements are generated from stale or unreviewed ledger balances', 'Financial reporting consolidation is treated as the same run as Consolidate online'],
+        prerequisites: ['Required period-end postings and adjustments complete', 'Financial report definitions and company/period context confirmed'],
+        tables: ['GeneralJournalEntry', 'GeneralJournalAccountEntry', 'DimensionAttributeValueCombination'],
+        optional: true
+      },
+      {
+        id: 'close',
+        title: 'Period Close Controls',
+        description: 'After close work is complete, review and set the status for each ledger and fiscal-calendar period; use the Financial period close workspace to assign and track tasks, not as the period-status control.',
+        roles: ['Controller'],
+        menuPaths: ['General ledger > Period close > Closing sheet; General ledger > Period close > Financial period close configuration (workspace)'],
+        docs: [
+          {
+            title: 'Financial period close workspace',
+            url: 'https://learn.microsoft.com/dynamics365/finance/general-ledger/financial-period-close-workspace'
+          }
+        ],
+        pitfalls: ['Putting a period on hold before required postings finish', 'Permanently closing a period while later adjustments may still be needed', 'Treating task completion in the workspace as equivalent to ledger-period status'],
+        prerequisites: ['Required subledger and ledger postings reconciled', 'Period-end review completed', 'Ledger and fiscal-period scope confirmed'],
+        tables: ['LedgerFiscalCalendarPeriod', 'FiscalCalendarPeriod', 'Ledger', 'GeneralJournalEntry'],
+        relations: [
+          {
+            from: 'LedgerFiscalCalendarPeriod',
+            to: 'FiscalCalendarPeriod',
+            badge: 'declared FK',
+            note: 'Declared relation; relationship_type is Aggregation.',
+            fields: ['LedgerFiscalCalendarPeriod.FiscalCalendarPeriod = FiscalCalendarPeriod.RecId']
+          },
+          {
+            from: 'LedgerFiscalCalendarPeriod',
+            to: 'Ledger',
+            badge: 'declared FK',
+            note: 'Declared relation; relationship_type is Aggregation.',
+            fields: ['LedgerFiscalCalendarPeriod.Ledger = Ledger.RecId']
           },
         ],
       },
       {
-        id: 'close',
-        title: 'Period Close & Reporting',
-        description: 'Close subledgers, run close checklist, report.',
+        id: 'year-end-close',
+        title: 'Year-end Close',
+        description: 'At fiscal year-end, run year-end close to transfer balance-sheet balances and profit-and-loss balances to retained earnings; closing transactions are optional, and the process can be rerun after adjusting entries.',
         roles: ['Controller'],
-        menuPaths: ['General ledger > Period close'],
+        menuPaths: ['Batch process — no menu item'],
         docs: [
           {
             title: 'Year-end close',
             url: 'https://learn.microsoft.com/dynamics365/finance/general-ledger/year-end-close'
           }
         ],
-        pitfalls: ['Subledger not closed', 'Financial reporter trees incomplete'],
-        prerequisites: ['Close checklist', 'Financial reporter trees'],
-        tables: ['LedgerPeriodClose', 'GeneralJournalEntry', 'FinancialReportingTree', 'SubledgerVoucherGeneralJournalEntry'],
-        relations: [
-          {
-            from: 'LedgerPeriodClose',
-            to: 'GeneralJournalEntry',
-            fields: ['Period/ledger linkage via LedgerPeriodClose.Ledger = GeneralJournalEntry.Ledger'],
-            note: 'Close tasks depend on ledger postings completion',
-          },
-          {
-            from: 'SubledgerVoucherGeneralJournalEntry',
-            to: 'GeneralJournalEntry',
-            fields: ['SubledgerVoucherGeneralJournalEntry.GeneralJournalEntry = GeneralJournalEntry.RecId'],
-            note: 'Subledger vouchers link to their posted GL journal entry',
-          },
-        ],
+        pitfalls: ['Template groups companies with different fiscal calendars', 'Retained-earnings account or dimension-transfer setup is wrong', 'Permanently closed status or rerun behavior is not reviewed before execution'],
+        prerequisites: ['Year-end template contains only legal entities with the selected fiscal calendar', 'Retained-earnings main accounts and dimension-transfer rules reviewed', 'Adjusting-entry and rerun plan agreed'],
+        tables: ['LedgerFiscalCalendarPeriod', 'FiscalCalendarPeriod', 'Ledger', 'GeneralJournalEntry'],
+        optional: true
       }
     ],
     edges: [
       { from: 'gl-setup', to: 'journals' },
-      { from: 'journals', to: 'consol' },
-      { from: 'consol', to: 'close' }
+      { from: 'journals', to: 'period-adjustments' },
+      { from: 'period-adjustments', to: 'close' },
+      { from: 'journals', to: 'bank-reconciliation' },
+      { from: 'bank-reconciliation', to: 'close' },
+      { from: 'period-adjustments', to: 'fx-revaluation' },
+      { from: 'fx-revaluation', to: 'allocations' },
+      { from: 'allocations', to: 'consol' },
+      { from: 'consol', to: 'financial-reporting' },
+      { from: 'financial-reporting', to: 'close' },
+      { from: 'close', to: 'year-end-close' },
     ]
   },
   {
@@ -5380,33 +5501,14 @@ export const tableDefs: Record<string, TableDef> = {
     ],
   },
 
-  LedgerPeriodClose: {
-    name: "LedgerPeriodClose",
-    description: "Period/year-end closing task record. Part of the Financial period close workspace. Tracks each closing task's template, associated fiscal period, assigned company, status, due date, and completion across the closing schedule.",
+  LedgerFiscalCalendarPeriod: {
+    name: "LedgerFiscalCalendarPeriod",
+    description: "Ledger-specific period status record associating a fiscal calendar period with a ledger.",
     module: "General Ledger",
-    docsUrl: "https://learn.microsoft.com/dynamics365/finance/general-ledger/financial-period-close-workspace",
     fields: [
-      { name: "RecId", type: "int64", note: "Primary key (surrogate)" },
-      { name: "TaskName", type: "string", note: "Name of the closing task (e.g., 'Post accruals', 'Run currency revaluation')" },
-      { name: "CloseGroup", type: "string (FK → LedgerFiscalCloseGroup)", note: "Closing schedule / group the task belongs to" },
-      { name: "FiscalCalendarPeriod", type: "int64 (FK → FiscalCalendarPeriod.RecId)", note: "The fiscal period this closing task is scoped to" },
-      { name: "DueDate", type: "date", note: "Calculated task due date based on template relative days and period end date" },
-      { name: "Status", type: "int32 (enum)", note: "Task status: 0=Open, 1=Completed, 2=Blocked (dependency not met)" },
-      { name: "DataAreaId", type: "string", note: "Legal entity the task applies to" },
-    ],
-  },
-
-  FinancialReportingTree: {
-    name: "FinancialReportingTree",
-    description: "Reporting tree definition used in Financial reporting. Defines the hierarchy of reporting units (nodes) that map to legal entities, departments, or cost centres.",
-    module: "General Ledger / Financial Reporting",
-    docsUrl: "https://learn.microsoft.com/dynamics365/fin-ops-core/fin-ops/analytics/financial-reporting-tree-definitions",
-    fields: [
-      { name: "RecId", type: "Int64", note: "Surrogate primary key" },
-      { name: "TreeName", type: "String", note: "Natural key — name of the reporting tree definition" },
-      { name: "Description", type: "String", note: "Human-readable description of the reporting tree" },
-      { name: "CurrentVersion", type: "Int32", note: "Active version number of the tree definition" },
-      { name: "IsActive", type: "Enum", note: "Whether this tree is active for report generation" },
+      { name: "FiscalCalendarPeriod", type: "Int64", fkTarget: "FiscalCalendarPeriod.RecId", note: "EDT FiscalCalendarPeriodRecId; fiscal period for this ledger." },
+      { name: "Ledger", type: "Int64", fkTarget: "Ledger.RecId", note: "EDT LedgerRecId; legal-entity ledger whose period status this record stores." },
+      { name: "Status", type: "Enum", note: "Enum FiscalPeriodStatus; status for this ledger and fiscal period." },
     ],
   },
 
