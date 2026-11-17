@@ -1314,7 +1314,7 @@ a.node.active {
 .pipeline-step {
   display: flex;
   align-items: center;
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   min-width: 132px;
   max-width: 100%;
 }
