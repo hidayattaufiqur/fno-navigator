@@ -98,3 +98,4 @@ tests/verify-sigma-all.mjs
 static/data/relation-graph.local.json
 
 tests/.tmp-relation-graph/
+static/data/graph-compact.json
