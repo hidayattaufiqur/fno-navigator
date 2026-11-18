@@ -829,8 +829,8 @@
 
       {#if graphAvailable}
         <fieldset class="sort-fieldset">
-          <legend class="sort-label">Join strength</legend>
-          <div class="sort-toggle" role="group" aria-label="Minimum join strength">
+          <legend class="sort-label">Minimum join</legend>
+          <div class="sort-toggle" role="group" aria-label="Minimum join strength: every hop must be at least this strong">
             <button type="button" class="sort-btn"
               class:sort-active={tierFilter === 'A'} aria-pressed={tierFilter === 'A'}
               title={TIER_MEANING.A} on:click={() => (tierFilter = 'A')}>A · joinable</button>
