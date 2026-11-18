@@ -93,3 +93,8 @@ tests/verify-sigma-all.mjs
 
 # Large static assets that should not be committed
 /static/fonts/
+
+# Licensed AOT-derived artifacts — never commit (see NOTICE.md)
+static/data/relation-graph.local.json
+
+tests/.tmp-relation-graph/
