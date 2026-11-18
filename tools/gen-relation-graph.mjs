@@ -33,6 +33,7 @@
 import { DatabaseSync } from 'node:sqlite'
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { createHash } from 'node:crypto'
 
 const args = process.argv.slice(2)
@@ -388,9 +389,16 @@ if (existsSync(fkPath)) {
   }
 }
 
-const graphPath = join(OUT_DIR, 'relation-graph.local.json')
-mkdirSync(OUT_DIR, { recursive: true })
+// The verbose graph is the working artifact for local tooling, NOT a web asset.
+// It must not live under static/: adapter-static copies static/ verbatim into
+// build/, so anything here is publicly served. Measured: a build with the
+// verbose graph in static/data shipped an extra 16 MB of redundant licensed
+// metadata to the web root. It goes to a sibling dir instead.
+const LOCAL_DIR = process.env.FNO_LOCAL_DIR ?? join(dirname(fileURLToPath(import.meta.url)), '..', '.local-graph')
+const graphPath = join(LOCAL_DIR, 'relation-graph.local.json')
+mkdirSync(LOCAL_DIR, { recursive: true })
 writeFileSync(graphPath, JSON.stringify(graph))
+mkdirSync(OUT_DIR, { recursive: true })
 
 // ── 7. Compact site artifact ────────────────────────────────────────────────
 // The site needs every node and edge, so it must ship. Measured: the verbose
@@ -433,6 +441,27 @@ const compact = {
   ]),
 }
 const compactPath = join(OUT_DIR, 'graph-compact.json')
+// Guard against replacing a full-corpus artifact with a partial one. Measured
+// failure: running the generator against the 17-model server corpus silently
+// overwrote the 180-model laptop artifact, dropping 8,872 nodes and 19,810
+// edges — and the site would have served the smaller graph without complaint.
+if (existsSync(compactPath)) {
+  try {
+    const prev = JSON.parse(readFileSync(compactPath, 'utf8'))
+    const prevNodes = prev.nodes?.length ?? 0
+    const prevEdges = prev.edges?.length ?? 0
+    if (compact.nodes.length < prevNodes || compact.edges.length < prevEdges) {
+      const msg = `REFUSING to shrink artifact: on disk ${prevNodes} nodes / ${prevEdges} edges, would write ${compact.nodes.length} / ${compact.edges.length}. Pass --force to override.`
+      if (!args.includes('--force')) {
+        console.error(msg)
+        process.exit(3)
+      }
+      console.error(`WARNING ${msg}`)
+    }
+  } catch {
+    // Unreadable previous artifact is not a reason to refuse.
+  }
+}
 writeFileSync(compactPath, JSON.stringify(compact))
 if (verdicts.verdicts.length) writeFileSync(join(OUT_DIR, 'graph-verdicts.json'), JSON.stringify(verdicts, null, 1))
 

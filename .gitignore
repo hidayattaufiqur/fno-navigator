@@ -99,3 +99,5 @@ static/data/relation-graph.local.json
 
 tests/.tmp-relation-graph/
 static/data/graph-compact.json
+
+.local-graph/
