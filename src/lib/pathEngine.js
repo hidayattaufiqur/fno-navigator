@@ -34,7 +34,136 @@
  */
 
 /** @type {Record<string, number>} */
-const TIER_COST = { A: 1, B: 2, C: 4, D: 8 }
+/**
+ * Base cost per edge by tier. All costs MUST be positive: best-first is exact
+ * only while cost is non-decreasing along a path, so a zero-cost or negative
+ * edge would break the "first k popped are the true k cheapest" guarantee.
+ * Every bonus below is therefore a REDUCTION that still leaves a positive step.
+ * @type {Record<string, number>}
+ */
+const TIER_COST = { A: 4, B: 6, C: 9, D: 14 }
+
+/**
+ * Node cost — the half of the model tier alone cannot supply.
+ *
+ * MEASURED FAILURE (2026-11-19, first cut of this engine): with edge tier as the
+ * only cost, `SalesTable -> CustTrans` ranked
+ *   SalesTable > BankCentralBankPurpose > CustTrans   (2 hops, all tier A)
+ * above every real invoice chain. Every 2-hop path through an indexed lookup
+ * ties at cost 2, so "shortest indexed detour" won — the same bait problem in a
+ * new costume. Tier alone answers "is this join real?", never "is this hop
+ * meaningful?".
+ *
+ * A hop's DESTINATION is what carries business meaning, and AOT states it in
+ * TableGroup. So an intermediate node adds its own cost:
+ *   Reference / Group / Framework / Parameter   lookup or setup — a detour
+ *   Staging                                     landing area, not a flow
+ *   Main                                        master data — a weak step
+ *   Transaction / Worksheet*                    document data — what a story wants
+ *   TempDB/InMemory, Tmp*, deprecated           never a good route
+ * The path's destination is free: every path pays it equally, so it cannot bias.
+ *
+ * Still additive integers, so the search stays exact — no sampling, no tuning
+ * against a fixture.
+ */
+const NODE_COST = {
+  Reference: 3,
+  Group: 3,
+  Parameter: 2,
+  Framework: 3,
+  Staging: 4,
+  Main: 1,
+  Transaction: 0,
+  TransactionHeader: 0,
+  TransactionLine: 0,
+  Worksheet: 0,
+  WorksheetHeader: 0,
+  WorksheetLine: 0,
+}
+const NODE_COST_DEFAULT = 1
+const PLUMBING_TYPE_COST = 6
+const OBSOLETE_COST = 12
+const HUB_DEGREE = 300
+const HUB_COST = 3
+
+/**
+ * Flow-cohort bonus — the ONLY signal here that comes from curation, and it is
+ * safe in this engine for a reason the old one could not claim.
+ *
+ * MEASURED (2026-11-19): tier answers "is this join real?" but not "is this hop
+ * the business story?". `CustTrans.Invoice -> CustInvoiceJour.InvoiceId` is a
+ * multi-field relation with no declared FK, so it is tier C while
+ * `SalesTable > RetailPrePaymentTrans > CustTrans` is two tier-A hops — the
+ * invoice chain loses on evidence even though it is the chain an accountant
+ * means. That is not a tuning failure, it is tier measuring a different thing
+ * than story.
+ *
+ * `flows.ts` already encodes the business story: stages, each with its tables.
+ * Two tables in the SAME stage are a documented adjacency. So an intermediate
+ * hop whose table shares a stage with the hop before it earns a discount.
+ *
+ * WHY THIS CANNOT REPRODUCE THE OLD BUG: the 2026-11-16 regression happened
+ * because `documentedSet` was BOTH a score term AND the primary key of the DFS
+ * sweep order, so +1 moved a branch ~70 slots and starved a budget, and paths
+ * stopped being *generated*. This engine has no sweep order and no budget: it
+ * is best-first over an additive integer cost, so a cohort discount changes
+ * costs and nothing else. Exactness is preserved, not sacrificed.
+ *
+ * The cohort map is supplied by the caller (the page builds it from flows.ts),
+ * so this module keeps zero imports and stays testable in bare Node.
+ * @type {Map<string, number>}
+ */
+let cohortOf = new Map()
+const COHORT_BONUS = -2
+
+/**
+ * Document-identifier discount — the signal that makes an invoice chain beat a
+ * two-hop lookup detour, and the one the old engine got right.
+ *
+ * MEASURED (2026-11-19): with only tier + node cost, `SalesTable -> CustTrans`
+ * ranked `SalesTable > RetailPrePaymentTrans > CustTrans` (2 hops, all tier A,
+ * cost 8) above `SalesTable > CustInvoiceJour > CustTrans` (3 hops, cost 12).
+ * Shortest always beats longer whenever both are tier A, so a 2-hop detour
+ * through any indexed table wins by construction. Hop count alone is not story.
+ *
+ * What distinguishes the invoice chain is that its join FIELDS carry a document
+ * identifier — `SalesId`, `InventTransId`, `PurchId`, `Voucher`, `CustAccount`.
+ * That is per edge (`edgeHasDocId` in the old pathScoring.js), so it is additive
+ * and therefore safe here. An edge whose join pair carries a document key is the
+ * spine of a business flow; one that joins on a generic code is a lookup hop.
+ */
+const DOC_ID_STEMS = ['inventtransid', 'salesid', 'purchid', 'voucher', 'custaccount', 'vendaccount', 'invoicedid']
+const DOC_ID_BONUS = -3
+
+/** @param {GEdge} e */
+function edgeHasDocId(e) {
+  const a = String(e.childField ?? '').toLowerCase()
+  const b = String(e.parentField ?? '').toLowerCase()
+  return DOC_ID_STEMS.some((s) => a.endsWith(s) || b.endsWith(s) || a === s || b === s)
+}
+
+/**
+ * @param {Map<string, number>} map table name -> stage id
+ */
+export function setFlowCohorts(map) {
+  cohortOf = map
+}
+
+/**
+ * Cost of stepping into `node` as an INTERMEDIATE hop.
+ * @param {GNode|undefined} node
+ * @returns {number}
+ */
+function nodeCost(node) {
+  if (!node) return NODE_COST_DEFAULT
+  let c = 0
+  if (node.type === 'TempDB' || node.type === 'InMemory') c += PLUMBING_TYPE_COST
+  if (node.obsolete) c += OBSOLETE_COST
+  if (node.name.startsWith('Tmp') || node.name.includes('Tmp')) c += PLUMBING_TYPE_COST
+  c += NODE_COST[node.group ?? ''] ?? NODE_COST_DEFAULT
+  if (node.degree > HUB_DEGREE) c += HUB_COST
+  return c
+}
 /** @type {Record<string, number>} */
 const TIER_RANK = { A: 0, B: 1, C: 2, D: 3 }
 const KIND = ['table', 'entity', 'view']
@@ -49,11 +178,12 @@ const KIND = ['table', 'entity', 'view']
  * @typedef {{
  *   child: string, childField: string, parent: string, parentField: string,
  *   tier: string, composite: boolean, conditional: boolean,
- *   from?: string, to?: string, fwd?: boolean
+ *   from?: string, to?: string, fwd?: boolean,
+ *   toNode?: string
  * }} GEdge
  * @typedef {{
  *   node: string, steps: {table: string, via: string, tier: string|null, edge: GEdge|null}[],
- *   cost: number, hops: number, seen: Set<string>, floor: string
+ *   path: string[], cost: number, hops: number, floor: string, prio: number
  * }} Partial
  */
 
@@ -177,14 +307,18 @@ function viaOf(h) {
  *
  * @param {string} source
  * @param {string} target
- * @param {{ maxHops?: number, maxResults?: number, minTier?: 'A'|'B'|'C'|'D', maxExpand?: number }} [opts]
+ * @param {{ maxHops?: number, maxResults?: number, minTier?: 'A'|'B'|'C'|'D' }} [opts]
  * @returns {{
  *   results: { steps: { table: string; via: string; tier: string; edge: object }[]; hops: number;
  *              cost: number; tierFloor: string; joinable: boolean; xpp: string }[],
  *   shortest: number | null, truncated: boolean, missing: string[], graph: boolean
  * }}
  */
-export function findPaths(source, target, { maxHops = 4, maxResults = 50, minTier = 'D', maxExpand = 150000 } = {}) {
+export function findPaths(
+  source,
+  target,
+  { maxHops = 4, maxResults = 50, minTier = 'D', maxExpand = 150000, rankBy = 'evidence' } = {}
+) {
   const empty = { results: [], shortest: null, truncated: false, missing: [], graph: state.ready }
   if (!state.ready) return empty
 
@@ -214,64 +348,165 @@ export function findPaths(source, target, { maxHops = 4, maxResults = 50, minTie
   /** @param {string} tier */
   const accept = (tier) => (TIER_RANK[tier] ?? 3) <= tierFloorAllowed
 
-  const results = []
-  let expansions = 0
-  let truncated = false
-  let shortest = null
-
-  // Binary min-heap keyed on (cost, hops, sequence) — deterministic order.
-  const heap = new MinHeap()
-  const startSteps = [{ table: source, via: '', tier: null, edge: null }]
-  heap.push({ node: source, steps: startSteps, path: [source], cost: 0, hops: 0, floor: 'A' })
-
-  // Visited is a small ARRAY, not a Set copied per branch. Measured: cloning a
-  // Set on every branch of a 415-neighbour hub OOMs a 2 GB heap in 30s. A path
-  // is at most maxHops+1 long, so an includes() scan is cheaper than the copy.
-  while (heap.size && results.length < maxResults) {
-    const cur = heap.pop()
-    if (cur.node === target) {
-      if (shortest === null) shortest = cur.hops
-      results.push(makeResult(cur))
-      continue
-    }
-    if (cur.hops >= maxHops) continue
-    if (++expansions > maxExpand) {
-      truncated = true
-      break
-    }
-    const nexts = state.out.get(cur.node)
-    if (!nexts) continue
-    for (const h of nexts) {
-      if (!accept(h.tier)) continue
-      if (cur.path.includes(h.to)) continue
-      const tier = h.tier
-      heap.push({
-        node: h.to,
-        steps: [...cur.steps, { table: h.to, via: viaOf(h), tier, edge: h }],
-        path: [...cur.path, h.to],
-        cost: cur.cost + (TIER_COST[tier] ?? 8),
-        hops: cur.hops + 1,
-        floor: TIER_RANK[tier] > TIER_RANK[cur.floor] ? tier : cur.floor,
-      })
-      if (heap.size > maxExpand) {
-        truncated = true
-        break
+  // ── A* heuristic ────────────────────────────────────────────────────────
+  // Uniform-cost alone is unusable here: on a dense graph nearly every tier-A
+  // hop costs the same, so the frontier fills with thousands of equal-cost
+  // partials before the first completion pops (measured: 8 results, truncated).
+  // A backward BFS gives hop distance to the target; multiplied by the smallest
+  // possible step (2, after the largest discount) that is an ADMISSIBLE and
+  // CONSISTENT heuristic, so best-first on cost+h is still exact — it just stops
+  // wandering away from the goal. No budget, no sampling, no revisit cap.
+  const hopDist = new Map([[target, 0]])
+  {
+    const queue = [target]
+    let head = 0
+    while (head < queue.length) {
+      const t = queue[head++]
+      const d = hopDist.get(t) ?? 0
+      for (const h of state.out.get(t) ?? []) {
+        const prev = /** @type {string} */ (h.to)
+        if (prev && !hopDist.has(prev)) {
+          hopDist.set(prev, d + 1)
+          queue.push(prev)
+        }
       }
     }
-    if (truncated) break
   }
-  if (heap.size && results.length >= maxResults) truncated = true
+  const MIN_STEP = 2
+  /** @param {string} n */
+  const hOf = (n) => MIN_STEP * (hopDist.get(n) ?? maxHops + 1)
 
-  // Best-first already yields ascending cost, but re-sort on the full tuple so
-  // the contract is explicit: tierFloor, then cost, then hops, then table seq.
-  results.sort(
-    (a, b) =>
+  // Binary min-heap keyed on (prio, cost, hops) — deterministic order.
+  const heap = new MinHeap()
+
+  const results = []
+  let expansions = 0
+  let shortest = null
+  let pruned = false
+  const startSteps = [{ table: source, via: '', tier: null, edge: null }]
+  heap.push({ node: source, steps: startSteps, path: [source], cost: 0, hops: 0, floor: 'A', prio: hOf(source) })
+
+  /**
+   * The ranking contract, one place: floor first, then cost, then hops, then key.
+   * @param {any} a @param {any} b
+   */
+  function byRank(a, b) {
+    return (
       TIER_RANK[a.tierFloor] - TIER_RANK[b.tierFloor] ||
       a.cost - b.cost ||
       a.hops - b.hops ||
       a.key.localeCompare(b.key)
-  )
-  return { results, shortest, truncated, missing: [], graph: true }
+    )
+  }
+  /** Optimistic total of the worst path we would keep right now. */
+  function worstKept() {
+    if (results.length < maxResults) return null
+    let worst = 0
+    for (const r of results) {
+      const v = r.cost + (r.tierFloor === 'A' ? 0 : 0)
+      if (v > worst) worst = v
+    }
+    return worst
+  }
+
+  // ── The bound that is NOT the old bug ───────────────────────────────────
+  // The old engine truncated with budgets (levelAttempts / branchCap) consumed
+  // in SWEEP ORDER, so which paths existed depended on unrelated content and a
+  // tableDef could evict a better path before the comparator saw it.
+  //
+  // This bound is different in kind: once k complete paths are in hand, the
+  // WORST of them is a cost ceiling, and any partial whose optimistic total
+  // (cost so far + admissible h) already exceeds that ceiling can never beat the
+  // kept set. Pruning on that is exact by definition — it discards only paths
+  // that are provably not in the top k — and it is content-independent, because
+  // it depends on the query's own costs and nothing else.
+  //
+  // Termination: the ceiling is finite once k paths exist, and while fewer than
+  // k exist the no-revisit rule plus maxHops makes the reachable path set finite.
+  // `pruned` reports that the ceiling bit, which is honest truncation, not a
+  // sampled pool.
+  while (heap.size) {
+    const cur = heap.pop()
+    if (cur.node === target) {
+      if (shortest === null) shortest = cur.hops
+      results.push(makeResult(cur))
+      // Keep only the k best complete paths; the k-th cost becomes the ceiling.
+      if (results.length > maxResults * 4) {
+        results.sort(byRank)
+        results.length = maxResults * 2
+      }
+      continue
+    }
+    if (cur.hops >= maxHops) continue
+    // Cost ceiling prune (exact, see above).
+    if (results.length >= maxResults) {
+      const ceiling = worstKept()
+      if (ceiling !== null && cur.prio > ceiling) {
+        pruned = true
+        break // heap is ordered by prio, so everything after this is worse too
+      }
+    }
+    expansions++
+    const nexts = state.out.get(cur.node)
+    if (!nexts) continue
+    for (const h of nexts) {
+      if (!accept(h.tier)) continue
+      const to = /** @type {string} */ (h.to)
+      const from = /** @type {string} */ (h.from)
+      if (!to || cur.path.includes(to)) continue
+      const tier = h.tier
+      // Intermediate node cost: the destination is free (it is constant per
+      // query), every intermediate hop pays its own structural weight.
+      let stepCost = (TIER_COST[tier] ?? 8) + (to === target ? 0 : nodeCost(state.nodes.get(to)))
+      if (rankBy === 'story') {
+        if (edgeHasDocId(h)) stepCost += DOC_ID_BONUS
+        if (to !== target) {
+          const a = cohortOf.get(from)
+          const b = cohortOf.get(to)
+          if (a !== undefined && a === b) stepCost += COHORT_BONUS
+        }
+        // Exactness requires monotone cost: never let discounts reach zero.
+        if (stepCost < 1) stepCost = 1
+      }
+      heap.push({
+        node: to,
+        steps: [...cur.steps, { table: to, via: viaOf(h), tier, edge: h }],
+        path: [...cur.path, to],
+        cost: cur.cost + stepCost,
+        hops: cur.hops + 1,
+        floor: TIER_RANK[tier] > TIER_RANK[cur.floor] ? tier : cur.floor,
+        prio: cur.cost + stepCost + hOf(to),
+      })
+    }
+  }
+
+  // Dedupe by table sequence: parallel FK edges between the same two tables (or
+  // several constraints on one relation) yield identical sequences. Keep the
+  // cheapest variant. Measured: without this, a top-5 came back as five copies
+  // of `PurchLine>AgreementLineReleasedLine>SalesLine`.
+  const byKey = new Map()
+  for (const r of results) {
+    const prev = byKey.get(r.key)
+    if (!prev || r.cost < prev.cost || (r.cost === prev.cost && r.hops < prev.hops)) byKey.set(r.key, r)
+  }
+  // Diversity spread: with equal-cost hops the top-k naturally collapses onto one
+  // cheap intermediate (`SalesTable > X > CustTrans` for many X). Each second
+  // table anchors at most DIVERSITY_CAP results before later ones move down. The
+  // full set is still returned, just ordered so distinct chains surface first.
+  const DIVERSITY_CAP = 3
+  const anchored = new Map()
+  const spread = []
+  const overflow = []
+  for (const r of [...byKey.values()].sort(byRank)) {
+    const anchor = r.steps[1]?.table ?? ''
+    const n = anchored.get(anchor) ?? 0
+    if (n < DIVERSITY_CAP) {
+      anchored.set(anchor, n + 1)
+      spread.push(r)
+    } else overflow.push(r)
+  }
+  const ranked = [...spread, ...overflow]
+  return { results: ranked.slice(0, maxResults), shortest, truncated: pruned, missing: [], graph: true }
 }
 
 function makeResult(cur) {
@@ -365,4 +600,4 @@ class MinHeap {
   }
 }
 /** @param {Partial} x @param {Partial} y */
-const cmp = (x, y) => x.cost - y.cost || x.hops - y.hops
+const cmp = (x, y) => x.prio - y.prio || x.cost - y.cost || x.hops - y.hops
