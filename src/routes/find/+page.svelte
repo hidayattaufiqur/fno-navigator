@@ -1,12 +1,13 @@
 <script>
   import { onMount, tick } from 'svelte'
   import { page } from '$app/stores'
-  import { tableDefs } from '$lib/data/flows'
+  import { tableDefs, flows } from '$lib/data/flows'
   import { canonicalModule, missingTableIssueUrl } from '$lib/utils'
   import { findState } from '$lib/stores/findState'
   import { fkLoadState, fkLoadError, loadFkMap, getAllFkTableNames } from '$lib/stores/fkMap'
   import { specificityLoadState, specificityLoadError, loadSpecificity } from '$lib/stores/specificity'
-  import { findPaths } from '$lib/pathfinder'
+  import { findPaths as findPathsLegacy } from '$lib/pathfinder'
+  import { loadGraph, findPaths as findPathsTiered, setFlowCohorts, graphLoadState } from '$lib/pathEngine'
   import { TOOLTIP_COPY, REASON_TOOLTIP_COPY, LEGEND_GROUPS } from '$lib/findLegendCopy'
   import { goto } from '$app/navigation'
   // ── M2 graph pane (TDD §4.1) ─────────────────────────────────────────────
@@ -34,6 +35,69 @@
   let targetTable = $findState.targetTable
   let maxHops = $findState.maxHops
   let sortMode = $findState.sortMode
+
+  // Tiered engine state. graphStatus decides which engine answers: 'ready' means
+  // the generated verification graph is present; anything else means this build
+  // has only the public seed map and must use the legacy scorer.
+  let graphStatus = 'idle'
+  let tierFilter = 'D'
+  let rankBy = 'evidence'
+  let copiedKey = ''
+  $: graphAvailable = graphStatus === 'ready'
+
+  const TIER_MEANING = {
+    A: 'A — foreign key with an index: enforced by the database, safe to paste into X++',
+    B: 'B — foreign key declared, no index: a real relation, a query may need to scan',
+    C: 'C — conditional relation: the join also constrains a discriminator field',
+    D: 'D — convention only: no foreign key declared for this relation',
+  }
+
+  /**
+   * flows.ts encodes the documented business story: each stage lists its tables,
+   * so two tables in one stage are a documented adjacency. That is the only
+   * curated signal the tiered engine accepts, and it is safe there because the
+   * search is exact — a bonus changes costs, it cannot evict an ungenerated path.
+   * @returns {Map<string, number>}
+   */
+  function buildFlowCohorts() {
+    const m = new Map()
+    let stage = 0
+    for (const flow of flows ?? []) {
+      for (const st of flow.stages ?? []) {
+        const id = stage++
+        for (const t of st.tables ?? []) if (!m.has(t)) m.set(t, id)
+      }
+    }
+    return m
+  }
+
+  /**
+   * Copy a fully joinable chain as X++ and confirm in place. Clipboard API with a
+   * textarea fallback so it still works outside a secure context.
+   * @param {{ xpp: string, key: string }} result
+   */
+  async function copyXpp(result) {
+    if (!result.xpp) return
+    try {
+      await navigator.clipboard.writeText(result.xpp)
+    } catch {
+      const ta = document.createElement('textarea')
+      ta.value = result.xpp
+      ta.style.position = 'fixed'
+      ta.style.opacity = '0'
+      document.body.appendChild(ta)
+      ta.select()
+      try {
+        document.execCommand('copy')
+      } finally {
+        ta.remove()
+      }
+    }
+    copiedKey = result.key
+    setTimeout(() => {
+      if (copiedKey === result.key) copiedKey = ''
+    }, 2000)
+  }
   let pathResults = $findState.pathResults
   let searchState = $findState.searchState
   let searchError = $findState.searchError
@@ -69,6 +133,12 @@
     if (sp.has('graph')) {
       try { localStorage.setItem('graphEnabled', sp.get('graph') === '1' ? '1' : '0') } catch {}
     }
+    // Cohorts first (so the story profile has its stage adjacency), then the
+    // artifact. A 404 is a normal state for a public clone, not an error.
+    setFlowCohorts(buildFlowCohorts())
+    loadGraph().then(() => {
+      graphStatus = graphLoadState.status
+    })
     graphOn = resolveGraphFlag()
     replayQueue = hydrateFromParams(sp)
   })
@@ -90,9 +160,43 @@
   }
 
   // Initial slice + seed metadata for the trace view (rarest-first, Q4).
+  // The graph pane (selectSlice) predates the tiered engine and reads the legacy
+  // result shape: qualityClass, and edges with from/to/fromField/toField. The
+  // tiered engine reports tierFloor and edges in DECLARED direction (child/parent)
+  // plus a traversal flag, so convert at the boundary in one place rather than
+  // teaching two modules each other's vocabulary.
+  /**
+   * @param {any[]} results
+   * @returns {any[]}
+   */
+  function toLegacyShape(results) {
+    if (!graphAvailable) return results
+    const TIER_TO_CLASS = { A: 3, B: 2, C: 1, D: 0 }
+    return results.map((r) => ({
+      ...r,
+      qualityClass: TIER_TO_CLASS[r.tierFloor] ?? 0,
+      breakdown: { plumbing: 0, generic: 0 },
+      score: 0,
+      steps: r.steps.map((st) => {
+        if (!st.edge) return st
+        const e = st.edge
+        // Re-orient in traversal direction so `from` is where the path arrives from.
+        return {
+          ...st,
+          edge: {
+            from: st.table === e.child ? e.child : e.parent,
+            to: st.table === e.child ? e.parent : e.child,
+            fromField: st.table === e.child ? e.childField : e.parentField,
+            toField: st.table === e.child ? e.parentField : e.childField,
+          },
+        }
+      }),
+    }))
+  }
+
   $: slice =
     searchState === 'done' && pathResults.length > 0
-      ? selectSlice(pathResults, { cap: 40, specMap: getSpecificityMap() })
+      ? selectSlice(toLegacyShape(pathResults), { cap: 40, specMap: getSpecificityMap() })
       : null
   $: if (slice) liveNodes = new Set(slice.nodes)
 
@@ -346,7 +450,28 @@
 
     searchState = 'running'
     await new Promise((resolve) => setTimeout(resolve, 0))
-    const { results, shortest, truncated: wasTruncated, missing: missingTables } = findPaths(sourceTable, targetTable, maxHops, { sort: sortMode })
+    // Which engine answers. The tiered engine needs the generated graph; a public
+    // clone has only the MIT seed map, so it falls back to the legacy scorer.
+    // Never silent: graphAvailable drives a visible provenance notice.
+    let results, shortest, wasTruncated, missingTables
+    if (graphAvailable) {
+      const r = findPathsTiered(sourceTable, targetTable, {
+        maxHops,
+        maxResults: 50,
+        minTier: tierFilter,
+        rankBy,
+      })
+      results = r.results
+      shortest = r.shortest
+      wasTruncated = r.truncated
+      missingTables = r.missing
+    } else {
+      const r = findPathsLegacy(sourceTable, targetTable, maxHops, { sort: sortMode })
+      results = r.results
+      shortest = r.shortest
+      wasTruncated = r.truncated
+      missingTables = r.missing
+    }
     pathResults = results
     shortestHops = shortest
     truncated = wasTruncated
@@ -702,25 +827,50 @@
         </div>
       </fieldset>
 
-      <fieldset class="sort-fieldset">
-        <legend class="sort-label">Sort</legend>
-        <div class="sort-toggle" role="group" aria-label="Path sort order">
-          <button
-            type="button"
-            class="sort-btn"
-            class:sort-active={sortMode === 'shortest'}
-            aria-pressed={sortMode === 'shortest'}
-            on:click={() => changeSort('shortest')}
-          >Shortest</button>
-          <button
-            type="button"
-            class="sort-btn"
-            class:sort-active={sortMode === 'unique'}
-            aria-pressed={sortMode === 'unique'}
-            on:click={() => changeSort('unique')}
-          >Most unique</button>
-        </div>
-      </fieldset>
+      {#if graphAvailable}
+        <fieldset class="sort-fieldset">
+          <legend class="sort-label">Join strength</legend>
+          <div class="sort-toggle" role="group" aria-label="Minimum join strength">
+            <button type="button" class="sort-btn"
+              class:sort-active={tierFilter === 'A'} aria-pressed={tierFilter === 'A'}
+              title={TIER_MEANING.A} on:click={() => (tierFilter = 'A')}>A · joinable</button>
+            <button type="button" class="sort-btn"
+              class:sort-active={tierFilter === 'B'} aria-pressed={tierFilter === 'B'}
+              title={TIER_MEANING.B} on:click={() => (tierFilter = 'B')}>B · real FK</button>
+            <button type="button" class="sort-btn"
+              class:sort-active={tierFilter === 'C'} aria-pressed={tierFilter === 'C'}
+              title={TIER_MEANING.C} on:click={() => (tierFilter = 'C')}>C · conditional</button>
+            <button type="button" class="sort-btn"
+              class:sort-active={tierFilter === 'D'} aria-pressed={tierFilter === 'D'}
+              title={TIER_MEANING.D} on:click={() => (tierFilter = 'D')}>D · all</button>
+          </div>
+        </fieldset>
+        <fieldset class="sort-fieldset">
+          <legend class="sort-label">Rank by</legend>
+          <div class="sort-toggle" role="group" aria-label="Ranking profile">
+            <button type="button" class="sort-btn"
+              class:sort-active={rankBy === 'evidence'} aria-pressed={rankBy === 'evidence'}
+              title="Rank on D365FO metadata alone: join type, table group, deprecation"
+              on:click={() => (rankBy = 'evidence')}>Evidence</button>
+            <button type="button" class="sort-btn"
+              class:sort-active={rankBy === 'story'} aria-pressed={rankBy === 'story'}
+              title="Favour documented business flows: document-ID continuity and documented stages"
+              on:click={() => (rankBy = 'story')}>Story</button>
+          </div>
+        </fieldset>
+      {:else}
+        <fieldset class="sort-fieldset">
+          <legend class="sort-label">Sort</legend>
+          <div class="sort-toggle" role="group" aria-label="Path sort order">
+            <button type="button" class="sort-btn"
+              class:sort-active={sortMode === 'shortest'} aria-pressed={sortMode === 'shortest'}
+              on:click={() => changeSort('shortest')}>Shortest</button>
+            <button type="button" class="sort-btn"
+              class:sort-active={sortMode === 'unique'} aria-pressed={sortMode === 'unique'}
+              on:click={() => changeSort('unique')}>Most unique</button>
+          </div>
+        </fieldset>
+      {/if}
 
       <button class="find-btn" on:click={handleFind} disabled={searchState === 'running'}>
         {#if searchState === 'running'}
@@ -770,13 +920,20 @@
       </div>
     {:else}
       <div class="results-header">
+        <p class="graph-notice" class:seed-notice={!graphAvailable}>
+          {#if graphAvailable}
+            Paths verified against D365FO metadata: every hop is a declared relation, graded A–D by join strength.
+          {:else}
+            This build uses the public seed graph, derived from an older dataset — some relations may be stale or missing.
+          {/if}
+        </p>
         <span class="section-heading">
           {pathResults.length}{truncated ? '+' : ''} path{pathResults.length !== 1 ? 's' : ''}
           from <strong>{sourceTable}</strong> to <strong>{targetTable}</strong>
           {#if shortestHops !== null}
             · shortest <strong>{shortestHops}</strong> hop{shortestHops !== 1 ? 's' : ''}
           {/if}
-          · {#if sortMode === 'shortest'}fewest hops first{:else}ranked by class &amp; score{/if}
+          · {#if graphAvailable}weakest join {tierFilter} · {rankBy === 'story' ? 'documented flows favoured' : 'metadata evidence only'}{:else if sortMode === 'shortest'}fewest hops first{:else}ranked by class &amp; score{/if}
         </span>
         <!-- Legend: badge explanations next to the results header (DESIGN.md
              §/find.5) — collapsed by default, dossier copy unchanged. -->
@@ -826,7 +983,9 @@
           data-tip={TOOLTIP_COPY['sampled-note']}
           tabindex="0"
           aria-describedby="find-tip"
-        >Search space sampled: showing {pathResults.length} of many more possible paths. Reduce max hops for a shorter list.</p>
+        >{graphAvailable
+            ? `Top ${pathResults.length} shown — the search stopped once no remaining path could beat those already found.`
+            : `Search space sampled: showing ${pathResults.length} of many more possible paths. Reduce max hops for a shorter list.`}</p>
       {/if}
     {/if}
 
@@ -967,12 +1126,28 @@
                     class:path-source={stepIndex === 0}
                     class:path-target={stepIndex === result.steps.length - 1}
                   >{step.table}</a>
+                  {#if graphAvailable && step.tier}
+                    <span class="tier-chip tier-{step.tier}" title={TIER_MEANING[step.tier]}>{step.tier}</span>
+                  {/if}
                 {/each}
                 <!-- One badge max per row (DESIGN.md §/find.4):
                      rank #1 → cleanest; else one semantic badge (business flow
                      wins over curated; shortest badge dropped — it's the sort
                      mode, stated in the header). -->
-                {#if i === cleanestIndex}
+                {#if graphAvailable}
+                  {#if result.joinable}
+                    <button
+                      type="button"
+                      class="copy-xpp-btn"
+                      title="Copy this chain as an X++ select-join — every hop is an indexed foreign key"
+                      on:click={() => copyXpp(result)}
+                    >{copiedKey === result.key ? 'Copied' : 'Copy X++'}</button>
+                  {:else}
+                    <span class="tier-floor-badge" title={TIER_MEANING[result.tierFloor]}>
+                      weakest hop {result.tierFloor}
+                    </span>
+                  {/if}
+                {:else if i === cleanestIndex}
                   <span
                     class="cleanest-badge"
                     data-tip={TOOLTIP_COPY['cleanest-path']}
@@ -1008,13 +1183,15 @@
               <!-- Row 3: breakdown — hops · raw score (class ≤2 only) · semantic link counts · via tables -->
               <div class="path-breakdown">
                 {hops} hop{hops !== 1 ? 's' : ''}
-                {#if result.qualityClass <= 2}
+                {#if graphAvailable}
+                  <span aria-hidden="true"> · </span>cost {result.cost}
+                {:else if result.qualityClass <= 2}
                   <span aria-hidden="true"> · </span>score {result.score}
                 {/if}
-                {#if result.breakdown.generic > 0}
+                {#if !graphAvailable && (result.breakdown?.generic ?? 0) > 0}
                   <span aria-hidden="true"> · </span>{result.breakdown.generic} generic link{result.breakdown.generic !== 1 ? 's' : ''}
                 {/if}
-                {#if result.breakdown.plumbing > 0}
+                {#if !graphAvailable && (result.breakdown?.plumbing ?? 0) > 0}
                   <span aria-hidden="true"> · </span>{result.breakdown.plumbing} plumbing link{result.breakdown.plumbing !== 1 ? 's' : ''}
                 {/if}
               </div>
@@ -2003,4 +2180,56 @@
   }
   .pop-expand:disabled { opacity: 0.4; cursor: default; box-shadow: none; }
 
+
+  /* ── Tier vocabulary (added with the tiered engine) ─────────────────────── */
+  .tier-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.15rem;
+    height: 1.15rem;
+    margin-left: 0.22rem;
+    border-radius: 3px;
+    font-size: 0.66rem;
+    font-weight: 700;
+    line-height: 1;
+    border: 1px solid currentColor;
+  }
+  /* Strength descends visually, but never by colour alone — the letter is shown. */
+  .tier-A { color: var(--ok, #2f9e5f); }
+  .tier-B { color: var(--text, #cfd6e4); }
+  .tier-C { color: var(--warn, #c08a2e); }
+  .tier-D { color: var(--dim, #7b8698); }
+
+  .tier-floor-badge {
+    margin-left: 0.5rem;
+    padding: 0.05rem 0.4rem;
+    border-radius: 999px;
+    font-size: 0.68rem;
+    color: var(--dim, #7b8698);
+    border: 1px dashed currentColor;
+  }
+
+  .copy-xpp-btn {
+    margin-left: 0.5rem;
+    padding: 0.1rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.68rem;
+    cursor: pointer;
+    color: var(--ok, #2f9e5f);
+    background: transparent;
+    border: 1px solid currentColor;
+  }
+  .copy-xpp-btn:hover { background: rgba(47, 158, 95, 0.12); }
+
+  .graph-notice {
+    margin: 0 0 0.5rem;
+    font-size: 0.72rem;
+    color: var(--dim, #7b8698);
+  }
+  .graph-notice.seed-notice {
+    padding: 0.35rem 0.55rem;
+    border-left: 2px solid var(--warn, #c08a2e);
+    color: var(--warn, #c08a2e);
+  }
 </style>

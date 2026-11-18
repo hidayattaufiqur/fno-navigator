@@ -81,6 +81,20 @@ const NODE_COST = {
   WorksheetLine: 0,
 }
 const NODE_COST_DEFAULT = 1
+// Form-use discount — the second measured correction, and the one that finally
+// separates a real business table from a leaf stub.
+//
+// MEASURED (2026-11-19): `SalesTable -> CustTrans` kept returning
+// `SalesTable > RetailPrePaymentTrans > CustTrans`. Both intermediates are
+// TableGroup=Transaction, so node cost could not tell them apart. What does:
+// RetailPrePaymentTrans appears on 0 forms and has 2 relations; CustInvoiceJour
+// appears on 51 forms and has 271. A table that no user-facing form ever shows is
+// not part of the business story an analyst is tracing, whatever its TableGroup.
+//
+// So a hop into a table with no form presence costs more. This is still an AOT
+// fact (form data sources), not curation, and it is additive, so exactness holds.
+const NO_FORM_COST = 4
+const LOW_FORM_COST = 2
 const PLUMBING_TYPE_COST = 6
 const OBSOLETE_COST = 12
 const HUB_DEGREE = 300
@@ -161,6 +175,9 @@ function nodeCost(node) {
   if (node.obsolete) c += OBSOLETE_COST
   if (node.name.startsWith('Tmp') || node.name.includes('Tmp')) c += PLUMBING_TYPE_COST
   c += NODE_COST[node.group ?? ''] ?? NODE_COST_DEFAULT
+  // Form presence: a table shown on no form is not part of a user-facing flow.
+  if (node.formUse === 0) c += NO_FORM_COST
+  else if (node.formUse <= 2) c += LOW_FORM_COST
   if (node.degree > HUB_DEGREE) c += HUB_COST
   return c
 }
