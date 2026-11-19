@@ -184,8 +184,18 @@ export const PLUMBING_TABLE_PREFIXES = ['Dimension']
 
 const DERIVED_TABLE_PATTERN = /Statistics|Totaling|Snapshot|BIAnalysis|Printout|Buffer|WorkTable|Parm|ForProcessing/
 
-/** @param {string} table */
+/**
+ * @param {string} table
+ *
+ * Guarded because this is reached from the legacy DFS with a table name that can
+ * be undefined: on browser back-navigation into /find the restored edge state has
+ * a step whose table is missing, `roleOf`/`isPlumbingTable` throw on `.toLowerCase`
+ * / `.startsWith`, the Svelte component dies mid-render and the page comes back
+ * blank. A missing name is not plumbing; it is unscoreable, so return false and
+ * let the caller skip it.
+ */
 export function isPlumbingTable(table) {
+  if (!table) return false
   if (table.startsWith('Tmp') || table.includes('Tmp')) return true
   if (DERIVED_TABLE_PATTERN.test(table)) return true
   return PLUMBING_TABLE_PREFIXES.some((prefix) => table.startsWith(prefix))
@@ -279,6 +289,8 @@ export const ROLE_ORDER = { master: 0, trans: 1, origin: 2, line: 3, party: 4 }
  * @returns {'master'|'trans'|'origin'|'line'|'party'|null}
  */
 export function roleOf(table) {
+  // undefined guard: see isPlumbingTable. A nameless table has no role.
+  if (!table) return null
   if (PARTY_TABLES.has(table)) return 'party'
   const t = table.toLowerCase()
   if (t.endsWith('origin')) return 'origin'

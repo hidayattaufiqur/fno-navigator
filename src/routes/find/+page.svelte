@@ -163,15 +163,41 @@
       if (copiedKey === result.key) copiedKey = ''
     }, 2000)
   }
-  let pathResults = $findState.pathResults
-  let searchState = $findState.searchState
+  // Results are NOT restored from the store.
+  //
+  // The store is module-level so it survives navigation, which is what keeps the
+  // form fields filled in on back-navigation. Restoring the RESULT SET is a
+  // different matter: those objects carry `steps[].edge` references into the
+  // loaded graph, and on a fresh mount the graph has not loaded yet. The render
+  // then hits a step with no table name, `roleOf`/`isPlumbingTable` throw, the
+  // component dies mid-render, and the browser shows the PREVIOUS route's DOM
+  // while the URL says /find — the page looks frozen on the table you came from.
+  //
+  // So: inputs persist, results do not. A back-navigation re-runs the search from
+  // the persisted inputs, which is also what a user expects.
+  let pathResults = []
+  let searchState = 'idle'
   let searchError = $findState.searchError
   let truncated = $findState.truncated
   let shortestHops = $findState.shortestHops
   let missing = $findState.missing
 
   // Sync local vars back to store on any change
-  $: findState.set({ sourceInput, targetInput, sourceTable, targetTable, maxHops, sortMode, pathResults, searchState, searchError, truncated, shortestHops, missing })
+  // Persist inputs only (see the note on pathResults above).
+  $: findState.set({
+    sourceInput,
+    targetInput,
+    sourceTable,
+    targetTable,
+    maxHops,
+    sortMode,
+    pathResults: [],
+    searchState,
+    searchError,
+    truncated,
+    shortestHops,
+    missing,
+  })
 
   // ── Deep links (?from=X&to=Y) ──────────────────────────────────────────────
 
@@ -191,6 +217,10 @@
     } else if (to) {
       targetTable = to
       targetInput = to
+    } else if (sourceTable && targetTable) {
+      // Back-navigation: the store kept the inputs but not the results, so
+      // re-run rather than showing an empty page with filled fields.
+      handleFind()
     }
     // M2: graph flag + URL hydration (Q12/Q15). ?graph=1 wins over localStorage
     // and persists opt-in; absent param defers to stored preference.
