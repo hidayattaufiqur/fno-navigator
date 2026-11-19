@@ -29,9 +29,11 @@ const gate = (name, ok, detail = '') => {
 const snapshot = async () => ({
   rows: await p.locator('.path-item').count(),
   first: (await p.locator('.path-item').first().innerText()).replace(/\n+/g, ' ').slice(0, 64),
-  first3: (await p.locator('.path-item').evaluateAll((els) =>
-    els.slice(0, 3).map((e) => e.innerText.replace(/\n+/g, ' ').slice(0, 50))
-  )).join(' // '),
+  // full table sequences of the first 6 rows: the pinned row is #1 under both
+  // rankers, so the difference shows below it and 50-char slices hide it.
+  order: (await p.locator('.path-item .path-chain').evaluateAll((els) =>
+    els.slice(0, 6).map((e) => e.innerText.replace(/\s+/g, ' ').trim())
+  )).join(' | '),
   // tier chips of NON-canonical rows only: the pinned chain is exempt from
   // minTier by design (it carries the arbitrated answer, which may include a
   // C or D hop), so including it would test the wrong thing.
@@ -50,21 +52,25 @@ await p.waitForSelector('.path-item', { timeout: 30000 })
 await p.waitForTimeout(700)
 
 // ── defaults are A + Story ────────────────────────────────────────────────
-const aPressed = await p.locator('button[aria-pressed="true"]:has-text("A · joinable")').count()
+// The four tier buttons are gone (2026-11-19). The toolbar is max hops + rank.
+const tierButtons = await p.locator('button:has-text("· joinable"), button:has-text("· all")').count()
+gate('tier filter removed from the toolbar', tierButtons === 0, `${tierButtons} tier buttons`)
 const storyPressed = await p.locator('button[aria-pressed="true"]:has-text("Story")').count()
-gate('default minimum join is A', aPressed === 1)
 gate('default rank is Story', storyPressed === 1)
+const chipCount = await p.locator('.tier-chip').count()
+gate('per-hop tier chips removed', chipCount === 0, `${chipCount} chips`)
 
 const d0 = await snapshot()
-gate('canonical chain visible at default A', d0.canon > 0, `${d0.canon} pinned · ${d0.first}`)
-gate('A default shows only tier-A hops (canonical chain exempt)', !/[BCD]/.test(d0.chips), `non-canonical chips=${d0.chips}`)
+gate('canonical chain visible at default B', d0.canon > 0, `${d0.canon} pinned · ${d0.first}`)
+const tags = await p.locator('.join-tag').allInnerTexts()
+gate(
+  'non-joinable rows carry one tag, not four chips',
+  tags.length === 0 || tags.every((t) => ['scan', 'conditional', 'convention'].includes(t)),
+  JSON.stringify([...new Set(tags)])
+)
 
-// ── clicking a tier changes the result set WITHOUT pressing Find ──────────
-await p.locator('button:has-text("D · all")').click()
-await p.waitForTimeout(1400)
-const d1 = await snapshot()
-gate('tier click re-runs automatically', d1.first !== d0.first || d1.chips !== d0.chips, `${d0.chips} → ${d1.chips}`)
-gate('D · all admits weaker hops', /[BCD]/.test(d1.chips), `chips=${d1.chips}`)
+// ── rank toggle re-runs without pressing Find ─────────────────────────────
+const d1 = d0
 
 // ── rank toggle changes ordering ─────────────────────────────────────────
 await p.locator('button:has-text("Evidence")').click()
@@ -72,11 +78,7 @@ await p.waitForTimeout(1400)
 const d2 = await snapshot()
 // The pinned canonical row is #1 under BOTH rankers (that is the point of
 // pinning), so the toggle must be judged on the rows BELOW it.
-gate(
-  'rank toggle reorders the inferred rows',
-  d2.first3 !== d1.first3,
-  `story="${d1.first3.slice(0, 60)}" evidence="${d2.first3.slice(0, 60)}"`
-)
+gate('rank toggle reorders the inferred rows', d2.order !== d1.order, d2.order === d1.order ? 'identical order' : 'order changed')
 
 // ── back to Story: canonical pin restored and first ──────────────────────
 await p.locator('button:has-text("Story")').click()

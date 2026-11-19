@@ -234,7 +234,7 @@
         "A"
       ],
       "weakestTier": "D",
-      "why": "Line up to header, header to invoice, invoice to ledger."
+      "why": "ARBITRATED: the true deterministic Order-to-Cash spine from line to customer subledger, even at 4 tables. Left unpinned, the Currency wormhole wins in fallback mode."
     },
     {
       "id": "custtrans-salesline-otc",
@@ -255,7 +255,7 @@
         "D"
       ],
       "weakestTier": "D",
-      "why": "Reverse of SalesLine \u2192 CustTrans: Line up to header, header to invoice, invoice to ledger."
+      "why": "Reverse of SalesLine \u2192 CustTrans: the true deterministic Order-to-Cash spine from customer subledger to line. Left unpinned, the Currency wormhole wins in fallback mode."
     },
     {
       "id": "custtable-custtrans-otc",
@@ -860,15 +860,15 @@
       "bar": "top-10",
       "canonical": [
         "InventTable",
-        "InventSum",
+        "InventItemLocation",
         "InventDim"
       ],
       "tiers": [
-        "A",
+        "D",
         "A"
       ],
-      "weakestTier": "A",
-      "why": "ARBITRATED (was BOMVersion): BOMVersion only exists for manufactured items with a BOM, returning zero rows for purchased/traded items. InventSum is the universal stock bridge."
+      "weakestTier": "D",
+      "why": "ARBITRATED (was InventSum, then InventItemLocation): InventSum is transactional and absent for newly created or never-stocked items, so the path only existed for items with stock history. InventItemLocation is master/warehouse setup data and exists regardless. InventTable.ItemId -> InventItemLocation.ItemId, then InventItemLocation.inventDimId -> InventDim.inventDimId."
     },
     {
       "id": "inventdim-inventtable-inv",
@@ -879,15 +879,15 @@
       "bar": "top-10",
       "canonical": [
         "InventDim",
-        "InventSum",
+        "InventItemLocation",
         "InventTable"
       ],
       "tiers": [
         "A",
-        "A"
+        "D"
       ],
-      "weakestTier": "A",
-      "why": "Reverse of InventTable \u2192 InventDim: ARBITRATED (was BOMVersion): BOMVersion only exists for manufactured items with a BOM, returning zero rows for purchased/traded items. InventSum is the universal stock bridge."
+      "weakestTier": "D",
+      "why": "Reverse of InventTable \u2192 InventDim: ARBITRATED (was InventSum, then InventItemLocation): InventSum is transactional and absent for newly created or never-stocked items, so the path only existed for items with stock history. InventItemLocation is master/warehouse setup data and exists regardless. InventTable.ItemId -> InventItemLocation.ItemId, then InventItemLocation.inventDimId -> InventDim.inventDimId."
     },
     {
       "id": "inventtrans-inventsettlement-inv",

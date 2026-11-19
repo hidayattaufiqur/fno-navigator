@@ -40,11 +40,17 @@
   // the generated verification graph is present; anything else means this build
   // has only the public seed map and must use the legacy scorer.
   let graphStatus = 'idle'
-  // Defaults are the most selective combination that still answers: tier A
-  // (joinable only — safe to paste into X++) with Story ranking (documented
-  // stage progression). D · all + Evidence is the noisiest setting and was the
-  // wrong default: it showed lookup detours first.
-  let tierFilter = 'A'
+  // Default minimum join is B, not A. A-only hid too many real relations: 44% of
+  // the 918 standard header→line relations are tier C or D, so a strict A default
+  // deleted genuine answers and left detours. D brought back the cartesian bait
+  // (Currency, CashDisc). B keeps declared FKs and drops convention-only hops.
+  //
+  // The tier CONTROL is gone from the toolbar (2026-11-19): with a derived
+  // header→line class and 74 canonical pins, a four-button tier filter was
+  // crowding the UI without changing the answer. The tier still gates the search
+  // and still decides whether Copy X++ is offered; it is now communicated as a
+  // single tag on the rows that need it instead of four chips per row.
+  let tierFilter = 'B'
   let rankBy = 'canonical'
   let copiedKey = ''
   $: graphAvailable = graphStatus === 'ready'
@@ -932,23 +938,6 @@
 
       {#if graphAvailable}
         <fieldset class="sort-fieldset">
-          <legend class="sort-label">Minimum join</legend>
-          <div class="sort-toggle" role="group" aria-label="Minimum join strength: every hop must be at least this strong">
-            <button type="button" class="sort-btn"
-              class:sort-active={tierFilter === 'A'} aria-pressed={tierFilter === 'A'}
-              title={TIER_MEANING.A} on:click={() => setFilter('tier', 'A')}>A · joinable</button>
-            <button type="button" class="sort-btn"
-              class:sort-active={tierFilter === 'B'} aria-pressed={tierFilter === 'B'}
-              title={TIER_MEANING.B} on:click={() => setFilter('tier', 'B')}>B · real FK</button>
-            <button type="button" class="sort-btn"
-              class:sort-active={tierFilter === 'C'} aria-pressed={tierFilter === 'C'}
-              title={TIER_MEANING.C} on:click={() => setFilter('tier', 'C')}>C · conditional</button>
-            <button type="button" class="sort-btn"
-              class:sort-active={tierFilter === 'D'} aria-pressed={tierFilter === 'D'}
-              title={TIER_MEANING.D} on:click={() => setFilter('tier', 'D')}>D · all</button>
-          </div>
-        </fieldset>
-        <fieldset class="sort-fieldset">
           <legend class="sort-label">Rank by</legend>
           <div class="sort-toggle" role="group" aria-label="Ranking profile">
             <button type="button" class="sort-btn"
@@ -1231,9 +1220,10 @@
                     class:path-source={stepIndex === 0}
                     class:path-target={stepIndex === result.steps.length - 1}
                   >{step.table}</a>
-                  {#if graphAvailable && step.tier}
-                    <span class="tier-chip tier-{step.tier}" title={TIER_MEANING[step.tier]}>{step.tier}</span>
-                  {/if}
+                  <!-- Per-hop tier chips removed 2026-11-19: six chips per row was
+                       the main source of visual noise. The only tier fact that
+                       changes what you DO with a row is whether the join is
+                       paste-safe, and that is now one tag on the row. -->
                 {/each}
                 <!-- One badge max per row (DESIGN.md §/find.4):
                      rank #1 → cleanest; else one semantic badge (business flow
@@ -1265,20 +1255,12 @@
                       title="Copy this chain as an X++ select-join — every hop is an indexed foreign key"
                       on:click={() => copyXpp(result)}
                     >{copiedKey === result.key ? 'Copied' : 'Copy X++'}</button>
-                  {:else if result.canonical}
-                    <!-- The arbitrated chain is exempt from Minimum join: it is
-                         pinned because it is the answer, not because it scored
-                         well. Saying "weakest hop D" beside a filter set to A
-                         reads as a contradiction, so it is labelled instead. -->
-                    <span
-                      class="tier-floor-badge canonical-exempt"
-                      title="This path is the arbitrated canonical chain for the pair, so the Minimum join filter does not apply to it. Hop tiers are still shown above."
-                    >
-                      weakest hop {result.tierFloor} · not filtered
-                    </span>
                   {:else}
-                    <span class="tier-floor-badge" title={TIER_MEANING[result.tierFloor]}>
-                      weakest hop {result.tierFloor}
+                    <!-- One tag instead of four chips. It carries the only tier
+                         fact that changes behaviour: why this row has no
+                         Copy X++ button. -->
+                    <span class="join-tag join-tag-{result.tierFloor}" title={TIER_MEANING[result.tierFloor]}>
+                      {result.tierFloor === 'B' ? 'scan' : result.tierFloor === 'C' ? 'conditional' : 'convention'}
                     </span>
                   {/if}
                 {:else if i === cleanestIndex}
@@ -2371,6 +2353,22 @@
     font-size: 0.72rem;
     color: var(--dim, #7b8698);
   }
+  .join-tag {
+    margin-left: 0.5rem;
+    padding: 0.05rem 0.45rem;
+    border-radius: 999px;
+    font-size: 0.68rem;
+    color: var(--dim, #7b8698);
+    border: 1px solid currentColor;
+  }
+  .join-tag-C {
+    color: var(--warn, #c08a2e);
+  }
+  .join-tag-D {
+    color: var(--warn, #c08a2e);
+    opacity: 0.85;
+  }
+
   .class-badge {
     margin-left: 0.5rem;
     padding: 0.05rem 0.45rem;
