@@ -130,6 +130,32 @@ check('a chain with an undeclared hop is rejected, not partially rendered', () =
   )
 })
 
+
+check('a declared direct relation is never hidden by minTier', () => {
+  // Measured defect 2026-11-19: SalesLine->SalesTable is a declared relation
+  // (tier C on InventRefId, tier D on SalesId). With minTier:'A' the one-hop
+  // answer vanished and the engine returned six 2-hop detours, two of them
+  // cartesian. A direct relation IS the answer; the tier filter must not delete
+  // it, and it must rank first.
+  for (const minTier of ['A', 'B', 'C', 'D']) {
+    const r = findPaths('SalesLine', 'SalesTable', { scope: SCOPE, maxHops: 2, maxResults: 10, minTier, rankBy: 'canonical' })
+    const direct = r.results.find((x) => x.hops === 1)
+    assert.ok(direct, `minTier=${minTier} must still return the direct relation`)
+    assert.equal(r.results[0].key, direct.key, `minTier=${minTier} must rank the direct relation first`)
+    assert.equal(r.shortest, 1, `minTier=${minTier} shortest must be 1`)
+  }
+})
+
+check('minTier still gates hops inside a multi-hop route', () => {
+  // The exemption is only for a DIRECT hop to the target; a weak hop in the
+  // middle of a longer chain must still be excluded.
+  const strict = findPaths('SalesTable', 'CustTrans', { scope: SCOPE, maxHops: 3, maxResults: 50, minTier: 'A', rankBy: 'evidence' })
+  for (const r of strict.results) {
+    if (r.hops === 1) continue
+    for (const s of r.steps) if (s.tier) assert.equal(s.tier, 'A', `tier ${s.tier} survived minTier=A inside a ${r.hops}-hop route`)
+  }
+})
+
 check('every result carries a bridges array (shape contract)', () => {
   const r = findPaths('SalesTable', 'CustTrans', { maxHops: 4, maxResults: 25, scope: SCOPE, rankBy: 'evidence' })
   for (const x of r.results) assert.ok(Array.isArray(x.bridges), 'bridges must always be an array')

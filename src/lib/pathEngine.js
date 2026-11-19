@@ -367,9 +367,16 @@ function stagePenalty(path) {
  * they differ in ordering, never in which paths exist.
  */
 function makeRanker(rankBy) {
+  // A direct relation always outranks a detour. If the two tables declare a
+  // relation, that relation is the answer to "how do these connect"; multi-hop
+  // routes are alternatives, not improvements. Without this, tier-first ordering
+  // put two tier-A hops above the tier-C direct relation, which reads as the
+  // tool refusing to show the obvious answer.
   /** @param {any} a @param {any} b */
+  const directFirst = (a, b) => (a.hops === 1 ? 0 : 1) - (b.hops === 1 ? 0 : 1)
   if (rankBy === 'canonical') {
     return (a, b) =>
+      directFirst(a, b) ||
       a.story - b.story ||
       TIER_RANK[a.tierFloor] - TIER_RANK[b.tierFloor] ||
       a.cost - b.cost ||
@@ -377,6 +384,7 @@ function makeRanker(rankBy) {
       a.key.localeCompare(b.key)
   }
   return (a, b) =>
+    directFirst(a, b) ||
     TIER_RANK[a.tierFloor] - TIER_RANK[b.tierFloor] ||
     a.cost - b.cost ||
     a.hops - b.hops ||
@@ -453,8 +461,25 @@ export function findPaths(
   }
 
   const allowed = TIER_RANK[minTier] ?? 3
-  /** @param {string} tier */
-  const accept = (tier) => (TIER_RANK[tier] ?? 3) <= allowed
+  /**
+   * Tier gate for a hop.
+   *
+   * A DIRECT relation between the two endpoints is exempt. Measured 2026-11-19:
+   * `SalesLine -> SalesTable` is a declared relation (tier C on InventRefId, tier
+   * D on SalesId), so `minTier: 'A'` deleted the one-hop answer and the engine
+   * returned six 2-hop detours instead — including cartesian bridges through
+   * CustTable and Currency. That is strictly worse than showing the direct
+   * relation with its honest tier: the user asked how two tables connect, and a
+   * declared relation IS the answer.
+   *
+   * The gate still applies to every hop of a multi-hop route, which is what it
+   * was for: keeping weak joins out of inferred chains.
+   * @param {string} tier @param {string} to @param {number} depth
+   */
+  const accept = (tier, to, depth) => {
+    if (depth === 1 && to === target) return true
+    return (TIER_RANK[tier] ?? 3) <= allowed
+  }
 
   /**
    * Traversal gate. When a scope is supplied, only tables inside it may be used
@@ -500,7 +525,7 @@ export function findPaths(
     if (path.length > maxHops) return
     for (const e of state.out.get(n) ?? []) {
       const to = /** @type {string} */ (e.to)
-      if (!to || onPath.has(to) || !accept(e.tier) || !usable(to)) continue
+      if (!to || onPath.has(to) || !accept(e.tier, to, path.length) || !usable(to)) continue
       onPath.add(to)
       path.push(to)
       steps.push({ table: to, via: viaOf(e), tier: e.tier, edge: e })
