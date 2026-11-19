@@ -335,6 +335,55 @@ function viaOf(e) {
 }
 
 /**
+ * ── RELATION CLASS: header → line ─────────────────────────────────────────
+ * Microsoft assigns `TableGroup` to encode what a table IS in a document:
+ * `WorksheetHeader`/`TransactionHeader` hold the document, the matching
+ * `WorksheetLine`/`TransactionLine` hold its rows. Measured on the artifact: 918
+ * standard header→line relations across 680 distinct table pairs.
+ *
+ * WHY THIS NEEDS TO BE FIRST-CLASS (defect 2026-11-19): `SalesLine -> SalesTable`
+ * is the textbook header/line relation — `SalesLine.SalesId -> SalesTable.SalesId`
+ * is declared — but it is tier D (no FK index) while six 2-hop detours are tier A,
+ * two of them cartesian. The finder returned the detours and demoted the real
+ * answer to "weakest hop C". The user's report was blunt and correct: the tool knew
+ * `SalesTable` is a header and `SalesLine` is its line and still got it wrong.
+ *
+ * The signal was already in the artifact as a cost multiplier. A cost term is
+ * washed out by tier; a relation CLASS is not. 44% of standard header→line
+ * relations are tier C or D (A 332 / B 43 / C 141 / D 402), so tier alone cannot
+ * separate them from noise — tier measures enforcement, not meaning.
+ */
+const HEADER_GROUPS = { WorksheetHeader: 'WorksheetLine', TransactionHeader: 'TransactionLine' }
+
+/**
+ * Is this hop a header/line relation? Requires the groups to match AND the line
+ * to join on the header's own identifier, which is what distinguishes "this line
+ * belongs to that header" from "this line shares an attribute with that header".
+ * @param {GEdge} e @returns {boolean}
+ */
+function isHeaderLineEdge(e) {
+  const childNode = state.nodes.get(e.child)
+  const parentNode = state.nodes.get(e.parent)
+  if (!childNode || !parentNode) return false
+  const cg = String(childNode.group ?? '')
+  const pg = String(parentNode.group ?? '')
+  const childField = String(e.childField ?? '').toLowerCase()
+  const parentField = String(e.parentField ?? '').toLowerCase()
+
+  // child is the line, parent is the header
+  if (HEADER_GROUPS[pg] === cg) {
+    const keyJoin = childField === parentField || parentField === 'recid' || childField.endsWith('recid')
+    if (keyJoin) return true
+  }
+  // parent is the line, child is the header
+  if (HEADER_GROUPS[cg] === pg) {
+    const keyJoin = childField === parentField || childField === 'recid' || parentField.endsWith('recid')
+    if (keyJoin) return true
+  }
+  return false
+}
+
+/**
  * Documented stage progression penalty. Lower is better.
  *
  * This is the signal that lifts the invoice chain from rank ~800 to rank 1 on
@@ -372,10 +421,15 @@ function makeRanker(rankBy) {
   // routes are alternatives, not improvements. Without this, tier-first ordering
   // put two tier-A hops above the tier-C direct relation, which reads as the
   // tool refusing to show the obvious answer.
+  // A header→line relation outranks everything. It is the document's own spine,
+  // and 44% of them are tier C/D, so tier cannot be trusted to surface them.
+  /** @param {any} a @param {any} b */
+  const classFirst = (a, b) => (a.relationClass === 'header-line' ? 0 : 1) - (b.relationClass === 'header-line' ? 0 : 1)
   /** @param {any} a @param {any} b */
   const directFirst = (a, b) => (a.hops === 1 ? 0 : 1) - (b.hops === 1 ? 0 : 1)
   if (rankBy === 'canonical') {
     return (a, b) =>
+      classFirst(a, b) ||
       directFirst(a, b) ||
       a.story - b.story ||
       TIER_RANK[a.tierFloor] - TIER_RANK[b.tierFloor] ||
@@ -384,6 +438,7 @@ function makeRanker(rankBy) {
       a.key.localeCompare(b.key)
   }
   return (a, b) =>
+    classFirst(a, b) ||
     directFirst(a, b) ||
     TIER_RANK[a.tierFloor] - TIER_RANK[b.tierFloor] ||
     a.cost - b.cost ||
@@ -396,7 +451,8 @@ function makeRanker(rankBy) {
  *   steps: {table: string, via: string, tier: string|null, edge: GEdge|null}[],
  *   path: string[], key: string, hops: number, cost: number,
  *   story: number, tierFloor: string, joinable: boolean, xpp: string,
- *   canonical: boolean, bridges: {table: string, field: string, reason: string}[]
+ *   canonical: boolean, relationClass: string|null,
+ *   bridges: {table: string, field: string, reason: string}[]
  * }} PathResult
  */
 
@@ -507,7 +563,9 @@ export function findPaths(
         (worst, t) => ((TIER_RANK[String(t)] ?? 3) > (TIER_RANK[worst] ?? 3) ? String(t) : worst),
         'A'
       )
+      const relationClass = path.length === 2 && stepsCopy[1].edge && isHeaderLineEdge(stepsCopy[1].edge) ? 'header-line' : null
       found.push({
+        relationClass,
         bridges: bridgeRisks(stepsCopy),
         steps: stepsCopy,
         path: path.slice(),
@@ -650,6 +708,7 @@ function rebuildChain(chain) {
   }
   const tierFloor = tiers.reduce((worst, t) => ((TIER_RANK[String(t)] ?? 3) > (TIER_RANK[worst] ?? 3) ? String(t) : worst), 'A')
   return {
+    relationClass: steps.length === 2 && steps[1].edge && isHeaderLineEdge(steps[1].edge) ? 'header-line' : null,
     steps,
     path: chain.slice(),
     key: chain.join('>'),

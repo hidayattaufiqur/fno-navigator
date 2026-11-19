@@ -109,6 +109,17 @@
       for (const p of data.pairs ?? []) {
         m.set(p.source + '|' + p.target, p.canonical)
         w.set(p.source + '|' + p.target, p.why ?? '')
+        // A canonical relation is the same fact in both directions. Developers
+        // trace line→header as often as header→line, and a relation that only
+        // pins top-down is invisible to half the queries that need it. Measured
+        // 2026-11-19: all 37 fixtures were one-directional, so `SalesLine ->
+        // SalesTable` returned no pin at all while `SalesTable -> SalesLine` did.
+        const reversed = [...p.canonical].reverse()
+        const revKey = p.target + '|' + p.source
+        if (!m.has(revKey)) {
+          m.set(revKey, reversed)
+          w.set(revKey, p.why ?? '')
+        }
       }
       canonicalMap = m
       canonicalWhy = w
@@ -1236,6 +1247,14 @@
                     >
                       canonical
                     </span>
+                  {:else if result.relationClass === 'header-line'}
+                    <!-- Layer 1: a derivable relation class, not a curated pin. -->
+                    <span
+                      class="class-badge"
+                      title="Header→line relation: one table is the document header and the other its line, joined on the header's own key. Derived from TableGroup, no curation."
+                    >
+                      header→line
+                    </span>
                   {:else if graphAvailable}
                     <span class="inferred-badge" title={TOOLTIP_COPY.inferred}>inferred</span>
                   {/if}
@@ -2352,6 +2371,16 @@
     font-size: 0.72rem;
     color: var(--dim, #7b8698);
   }
+  .class-badge {
+    margin-left: 0.5rem;
+    padding: 0.05rem 0.45rem;
+    border-radius: 999px;
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--accent, #5b8dd9);
+    border: 1px solid currentColor;
+  }
+
   .canonical-exempt {
     opacity: 0.75;
     font-style: italic;

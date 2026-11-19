@@ -1,6 +1,6 @@
 {
   "version": 3,
-  "note": "Canonical paths arbitrated by the domain owner (d9s, 2026-11-19). Every chain validated hop-by-hop against declared AOT relations. These are pinned expectations, not algorithm output — schema signals provably cannot recover business intent (hub-penalty sweep 0-30 scored 0/7 on the disagreements).",
+  "note": "Canonical paths arbitrated by the domain owner (d9s, 2026-11-19). Every chain validated hop-by-hop against declared AOT relations. These are pinned expectations, not algorithm output \u2014 schema signals provably cannot recover business intent (hub-penalty sweep 0-30 scored 0/7 on the disagreements). Every pair is pinned in BOTH directions (source|target and target|source), because the relational spine is the same fact either way and developers trace line->header as often as header->line.",
   "arbitratedAt": "2026-11-19",
   "pairs": [
     {
@@ -23,6 +23,25 @@
       "why": "Order posts an invoice journal, which creates the customer ledger transaction."
     },
     {
+      "id": "custtrans-salestable-otc",
+      "flow": "otc",
+      "source": "CustTrans",
+      "target": "SalesTable",
+      "maxHops": 2,
+      "bar": "top-10",
+      "canonical": [
+        "CustTrans",
+        "CustInvoiceJour",
+        "SalesTable"
+      ],
+      "tiers": [
+        "A",
+        "D"
+      ],
+      "weakestTier": "D",
+      "why": "Reverse of SalesTable \u2192 CustTrans: Order posts an invoice journal, which creates the customer ledger transaction."
+    },
+    {
       "id": "salestable-custinvoicejour-otc",
       "flow": "otc",
       "source": "SalesTable",
@@ -40,6 +59,23 @@
       "why": "Direct: CustInvoiceJour.SalesId -> SalesTable.SalesId."
     },
     {
+      "id": "custinvoicejour-salestable-otc",
+      "flow": "otc",
+      "source": "CustInvoiceJour",
+      "target": "SalesTable",
+      "maxHops": 2,
+      "bar": "top-10",
+      "canonical": [
+        "CustInvoiceJour",
+        "SalesTable"
+      ],
+      "tiers": [
+        "A"
+      ],
+      "weakestTier": "A",
+      "why": "Reverse of SalesTable \u2192 CustInvoiceJour: Direct: CustInvoiceJour.SalesId -> SalesTable.SalesId."
+    },
+    {
       "id": "salestable-salesline-otc",
       "flow": "otc",
       "source": "SalesTable",
@@ -55,6 +91,23 @@
       ],
       "weakestTier": "C",
       "why": "Direct header-to-line on SalesId."
+    },
+    {
+      "id": "salesline-salestable-otc",
+      "flow": "otc",
+      "source": "SalesLine",
+      "target": "SalesTable",
+      "maxHops": 2,
+      "bar": "top-10",
+      "canonical": [
+        "SalesLine",
+        "SalesTable"
+      ],
+      "tiers": [
+        "C"
+      ],
+      "weakestTier": "C",
+      "why": "Reverse of SalesTable \u2192 SalesLine: Direct header-to-line on SalesId."
     },
     {
       "id": "salesline-inventtrans-otc",
@@ -76,6 +129,25 @@
       "why": "ARBITRATED (was InventDim): InventDimId is only storage dimensions, so joining on it matches every transaction in the warehouse. Microsoft normalised InventTransId into InventTransOrigin: SalesLine.InventTransId == InventTransOrigin.InventTransId, then InventTransOrigin.RecId == InventTrans.InventTransOrigin."
     },
     {
+      "id": "inventtrans-salesline-otc",
+      "flow": "otc",
+      "source": "InventTrans",
+      "target": "SalesLine",
+      "maxHops": 2,
+      "bar": "top-10",
+      "canonical": [
+        "InventTrans",
+        "InventTransOrigin",
+        "SalesLine"
+      ],
+      "tiers": [
+        "A",
+        "D"
+      ],
+      "weakestTier": "D",
+      "why": "Reverse of SalesLine \u2192 InventTrans: ARBITRATED (was InventDim): InventDimId is only storage dimensions, so joining on it matches every transaction in the warehouse. Microsoft normalised InventTransId into InventTransOrigin: SalesLine.InventTransId == InventTransOrigin.InventTransId, then InventTransOrigin.RecId == InventTrans.InventTransOrigin."
+    },
+    {
       "id": "salestable-custtable-otc",
       "flow": "otc",
       "source": "SalesTable",
@@ -93,6 +165,23 @@
       "why": "Direct on CustAccount."
     },
     {
+      "id": "custtable-salestable-otc",
+      "flow": "otc",
+      "source": "CustTable",
+      "target": "SalesTable",
+      "maxHops": 2,
+      "bar": "top-10",
+      "canonical": [
+        "CustTable",
+        "SalesTable"
+      ],
+      "tiers": [
+        "A"
+      ],
+      "weakestTier": "A",
+      "why": "Reverse of SalesTable \u2192 CustTable: Direct on CustAccount."
+    },
+    {
       "id": "custinvoicejour-custtrans-otc",
       "flow": "otc",
       "source": "CustInvoiceJour",
@@ -108,6 +197,23 @@
       ],
       "weakestTier": "D",
       "why": "Direct on Voucher/InvoiceId/InvoiceAccount."
+    },
+    {
+      "id": "custtrans-custinvoicejour-otc",
+      "flow": "otc",
+      "source": "CustTrans",
+      "target": "CustInvoiceJour",
+      "maxHops": 2,
+      "bar": "top-10",
+      "canonical": [
+        "CustTrans",
+        "CustInvoiceJour"
+      ],
+      "tiers": [
+        "D"
+      ],
+      "weakestTier": "D",
+      "why": "Reverse of CustInvoiceJour \u2192 CustTrans: Direct on Voucher/InvoiceId/InvoiceAccount."
     },
     {
       "id": "salesline-custtrans-otc",
@@ -131,6 +237,27 @@
       "why": "Line up to header, header to invoice, invoice to ledger."
     },
     {
+      "id": "custtrans-salesline-otc",
+      "flow": "otc",
+      "source": "CustTrans",
+      "target": "SalesLine",
+      "maxHops": 3,
+      "bar": "top-10",
+      "canonical": [
+        "CustTrans",
+        "CustInvoiceJour",
+        "SalesTable",
+        "SalesLine"
+      ],
+      "tiers": [
+        "A",
+        "C",
+        "D"
+      ],
+      "weakestTier": "D",
+      "why": "Reverse of SalesLine \u2192 CustTrans: Line up to header, header to invoice, invoice to ledger."
+    },
+    {
       "id": "custtable-custtrans-otc",
       "flow": "otc",
       "source": "CustTable",
@@ -146,6 +273,23 @@
       ],
       "weakestTier": "A",
       "why": "Direct on AccountNum."
+    },
+    {
+      "id": "custtrans-custtable-otc",
+      "flow": "otc",
+      "source": "CustTrans",
+      "target": "CustTable",
+      "maxHops": 2,
+      "bar": "top-10",
+      "canonical": [
+        "CustTrans",
+        "CustTable"
+      ],
+      "tiers": [
+        "A"
+      ],
+      "weakestTier": "A",
+      "why": "Reverse of CustTable \u2192 CustTrans: Direct on AccountNum."
     },
     {
       "id": "purchtable-vendtrans-p2p",
@@ -167,6 +311,25 @@
       "why": "ARBITRATED (was CashDisc): CashDisc is a setup table, so joining through it yields a cartesian product of every vendor transaction sharing those terms. The PO posts an invoice journal, which generates the vendor ledger transaction."
     },
     {
+      "id": "vendtrans-purchtable-p2p",
+      "flow": "p2p",
+      "source": "VendTrans",
+      "target": "PurchTable",
+      "maxHops": 2,
+      "bar": "top-10",
+      "canonical": [
+        "VendTrans",
+        "VendInvoiceJour",
+        "PurchTable"
+      ],
+      "tiers": [
+        "A",
+        "D"
+      ],
+      "weakestTier": "D",
+      "why": "Reverse of PurchTable \u2192 VendTrans: ARBITRATED (was CashDisc): CashDisc is a setup table, so joining through it yields a cartesian product of every vendor transaction sharing those terms. The PO posts an invoice journal, which generates the vendor ledger transaction."
+    },
+    {
       "id": "purchtable-purchline-p2p",
       "flow": "p2p",
       "source": "PurchTable",
@@ -182,6 +345,23 @@
       ],
       "weakestTier": "A",
       "why": "Direct on PurchId."
+    },
+    {
+      "id": "purchline-purchtable-p2p",
+      "flow": "p2p",
+      "source": "PurchLine",
+      "target": "PurchTable",
+      "maxHops": 2,
+      "bar": "top-10",
+      "canonical": [
+        "PurchLine",
+        "PurchTable"
+      ],
+      "tiers": [
+        "A"
+      ],
+      "weakestTier": "A",
+      "why": "Reverse of PurchTable \u2192 PurchLine: Direct on PurchId."
     },
     {
       "id": "purchline-inventtrans-p2p",
@@ -200,7 +380,26 @@
         "A"
       ],
       "weakestTier": "A",
-      "why": "ARBITRATED (was InventDim): same normalisation as SalesLine — InventTransId is carried by InventTransOrigin."
+      "why": "ARBITRATED (was InventDim): same normalisation as SalesLine \u2014 InventTransId is carried by InventTransOrigin."
+    },
+    {
+      "id": "inventtrans-purchline-p2p",
+      "flow": "p2p",
+      "source": "InventTrans",
+      "target": "PurchLine",
+      "maxHops": 2,
+      "bar": "top-10",
+      "canonical": [
+        "InventTrans",
+        "InventTransOrigin",
+        "PurchLine"
+      ],
+      "tiers": [
+        "A",
+        "A"
+      ],
+      "weakestTier": "A",
+      "why": "Reverse of PurchLine \u2192 InventTrans: ARBITRATED (was InventDim): same normalisation as SalesLine \u2014 InventTransId is carried by InventTransOrigin."
     },
     {
       "id": "purchtable-vendtable-p2p",
@@ -220,6 +419,23 @@
       "why": "Direct on OrderAccount."
     },
     {
+      "id": "vendtable-purchtable-p2p",
+      "flow": "p2p",
+      "source": "VendTable",
+      "target": "PurchTable",
+      "maxHops": 2,
+      "bar": "top-10",
+      "canonical": [
+        "VendTable",
+        "PurchTable"
+      ],
+      "tiers": [
+        "A"
+      ],
+      "weakestTier": "A",
+      "why": "Reverse of PurchTable \u2192 VendTable: Direct on OrderAccount."
+    },
+    {
       "id": "vendinvoicejour-vendtrans-p2p",
       "flow": "p2p",
       "source": "VendInvoiceJour",
@@ -235,6 +451,23 @@
       ],
       "weakestTier": "D",
       "why": "Direct on Voucher/InvoiceDate/InvoiceAccount."
+    },
+    {
+      "id": "vendtrans-vendinvoicejour-p2p",
+      "flow": "p2p",
+      "source": "VendTrans",
+      "target": "VendInvoiceJour",
+      "maxHops": 2,
+      "bar": "top-10",
+      "canonical": [
+        "VendTrans",
+        "VendInvoiceJour"
+      ],
+      "tiers": [
+        "D"
+      ],
+      "weakestTier": "D",
+      "why": "Reverse of VendInvoiceJour \u2192 VendTrans: Direct on Voucher/InvoiceDate/InvoiceAccount."
     },
     {
       "id": "purchline-vendinvoicejour-p2p",
@@ -256,6 +489,25 @@
       "why": "ARBITRATED (was Currency): header-level canonical path. Line-level precision would be PurchLine -> VendInvoiceTrans -> VendInvoiceJour, kept as a separate fixture because a PO can have partial invoices."
     },
     {
+      "id": "vendinvoicejour-purchline-p2p",
+      "flow": "p2p",
+      "source": "VendInvoiceJour",
+      "target": "PurchLine",
+      "maxHops": 2,
+      "bar": "top-10",
+      "canonical": [
+        "VendInvoiceJour",
+        "PurchTable",
+        "PurchLine"
+      ],
+      "tiers": [
+        "A",
+        "A"
+      ],
+      "weakestTier": "A",
+      "why": "Reverse of PurchLine \u2192 VendInvoiceJour: ARBITRATED (was Currency): header-level canonical path. Line-level precision would be PurchLine -> VendInvoiceTrans -> VendInvoiceJour, kept as a separate fixture because a PO can have partial invoices."
+    },
+    {
       "id": "purchline-vendinvoicetrans-p2p",
       "flow": "p2p",
       "source": "PurchLine",
@@ -271,6 +523,23 @@
       ],
       "weakestTier": "B",
       "why": "Line-level invoice matching link (CreditedVendInvoiceTrans)."
+    },
+    {
+      "id": "vendinvoicetrans-purchline-p2p",
+      "flow": "p2p",
+      "source": "VendInvoiceTrans",
+      "target": "PurchLine",
+      "maxHops": 2,
+      "bar": "top-10",
+      "canonical": [
+        "VendInvoiceTrans",
+        "PurchLine"
+      ],
+      "tiers": [
+        "B"
+      ],
+      "weakestTier": "B",
+      "why": "Reverse of PurchLine \u2192 VendInvoiceTrans: Line-level invoice matching link (CreditedVendInvoiceTrans)."
     },
     {
       "id": "vendinvoicetrans-vendinvoicejour-p2p",
@@ -290,6 +559,23 @@
       "why": "Invoice line to invoice header."
     },
     {
+      "id": "vendinvoicejour-vendinvoicetrans-p2p",
+      "flow": "p2p",
+      "source": "VendInvoiceJour",
+      "target": "VendInvoiceTrans",
+      "maxHops": 2,
+      "bar": "top-10",
+      "canonical": [
+        "VendInvoiceJour",
+        "VendInvoiceTrans"
+      ],
+      "tiers": [
+        "A"
+      ],
+      "weakestTier": "A",
+      "why": "Reverse of VendInvoiceTrans \u2192 VendInvoiceJour: Invoice line to invoice header."
+    },
+    {
       "id": "purchtable-vendpackingslipjour-p2p",
       "flow": "p2p",
       "source": "PurchTable",
@@ -305,6 +591,23 @@
       ],
       "weakestTier": "A",
       "why": "PO to product receipt."
+    },
+    {
+      "id": "vendpackingslipjour-purchtable-p2p",
+      "flow": "p2p",
+      "source": "VendPackingSlipJour",
+      "target": "PurchTable",
+      "maxHops": 2,
+      "bar": "top-10",
+      "canonical": [
+        "VendPackingSlipJour",
+        "PurchTable"
+      ],
+      "tiers": [
+        "A"
+      ],
+      "weakestTier": "A",
+      "why": "Reverse of PurchTable \u2192 VendPackingSlipJour: PO to product receipt."
     },
     {
       "id": "prodtable-prodroute-ptp",
@@ -324,6 +627,23 @@
       "why": "Direct on ProdId."
     },
     {
+      "id": "prodroute-prodtable-ptp",
+      "flow": "ptp",
+      "source": "ProdRoute",
+      "target": "ProdTable",
+      "maxHops": 2,
+      "bar": "top-10",
+      "canonical": [
+        "ProdRoute",
+        "ProdTable"
+      ],
+      "tiers": [
+        "D"
+      ],
+      "weakestTier": "D",
+      "why": "Reverse of ProdTable \u2192 ProdRoute: Direct on ProdId."
+    },
+    {
       "id": "prodtable-prodbom-ptp",
       "flow": "ptp",
       "source": "ProdTable",
@@ -339,6 +659,23 @@
       ],
       "weakestTier": "C",
       "why": "Direct on ProdId."
+    },
+    {
+      "id": "prodbom-prodtable-ptp",
+      "flow": "ptp",
+      "source": "ProdBOM",
+      "target": "ProdTable",
+      "maxHops": 2,
+      "bar": "top-10",
+      "canonical": [
+        "ProdBOM",
+        "ProdTable"
+      ],
+      "tiers": [
+        "C"
+      ],
+      "weakestTier": "C",
+      "why": "Reverse of ProdTable \u2192 ProdBOM: Direct on ProdId."
     },
     {
       "id": "prodtable-inventtrans-ptp",
@@ -360,6 +697,25 @@
       "why": "ARBITRATED (was InventDim): production order to its inventory transactions via InventTransOrigin."
     },
     {
+      "id": "inventtrans-prodtable-ptp",
+      "flow": "ptp",
+      "source": "InventTrans",
+      "target": "ProdTable",
+      "maxHops": 2,
+      "bar": "top-10",
+      "canonical": [
+        "InventTrans",
+        "InventTransOrigin",
+        "ProdTable"
+      ],
+      "tiers": [
+        "A",
+        "A"
+      ],
+      "weakestTier": "A",
+      "why": "Reverse of ProdTable \u2192 InventTrans: ARBITRATED (was InventDim): production order to its inventory transactions via InventTransOrigin."
+    },
+    {
       "id": "prodtable-inventtable-ptp",
       "flow": "ptp",
       "source": "ProdTable",
@@ -375,6 +731,23 @@
       ],
       "weakestTier": "A",
       "why": "Direct on ItemId."
+    },
+    {
+      "id": "inventtable-prodtable-ptp",
+      "flow": "ptp",
+      "source": "InventTable",
+      "target": "ProdTable",
+      "maxHops": 2,
+      "bar": "top-10",
+      "canonical": [
+        "InventTable",
+        "ProdTable"
+      ],
+      "tiers": [
+        "A"
+      ],
+      "weakestTier": "A",
+      "why": "Reverse of ProdTable \u2192 InventTable: Direct on ItemId."
     },
     {
       "id": "prodtable-prodjournalprod-ptp",
@@ -394,6 +767,23 @@
       "why": "Direct on ProdId."
     },
     {
+      "id": "prodjournalprod-prodtable-ptp",
+      "flow": "ptp",
+      "source": "ProdJournalProd",
+      "target": "ProdTable",
+      "maxHops": 2,
+      "bar": "top-10",
+      "canonical": [
+        "ProdJournalProd",
+        "ProdTable"
+      ],
+      "tiers": [
+        "A"
+      ],
+      "weakestTier": "A",
+      "why": "Reverse of ProdTable \u2192 ProdJournalProd: Direct on ProdId."
+    },
+    {
       "id": "inventtable-inventtrans-inv",
       "flow": "inv",
       "source": "InventTable",
@@ -411,6 +801,23 @@
       "why": "Direct on ItemId."
     },
     {
+      "id": "inventtrans-inventtable-inv",
+      "flow": "inv",
+      "source": "InventTrans",
+      "target": "InventTable",
+      "maxHops": 2,
+      "bar": "top-10",
+      "canonical": [
+        "InventTrans",
+        "InventTable"
+      ],
+      "tiers": [
+        "A"
+      ],
+      "weakestTier": "A",
+      "why": "Reverse of InventTable \u2192 InventTrans: Direct on ItemId."
+    },
+    {
       "id": "inventtable-inventsum-inv",
       "flow": "inv",
       "source": "InventTable",
@@ -425,7 +832,24 @@
         "A"
       ],
       "weakestTier": "A",
-      "why": "Direct on ItemId — on-hand per dimension set."
+      "why": "Direct on ItemId \u2014 on-hand per dimension set."
+    },
+    {
+      "id": "inventsum-inventtable-inv",
+      "flow": "inv",
+      "source": "InventSum",
+      "target": "InventTable",
+      "maxHops": 2,
+      "bar": "top-10",
+      "canonical": [
+        "InventSum",
+        "InventTable"
+      ],
+      "tiers": [
+        "A"
+      ],
+      "weakestTier": "A",
+      "why": "Reverse of InventTable \u2192 InventSum: Direct on ItemId \u2014 on-hand per dimension set."
     },
     {
       "id": "inventtable-inventdim-inv",
@@ -447,6 +871,25 @@
       "why": "ARBITRATED (was BOMVersion): BOMVersion only exists for manufactured items with a BOM, returning zero rows for purchased/traded items. InventSum is the universal stock bridge."
     },
     {
+      "id": "inventdim-inventtable-inv",
+      "flow": "inv",
+      "source": "InventDim",
+      "target": "InventTable",
+      "maxHops": 2,
+      "bar": "top-10",
+      "canonical": [
+        "InventDim",
+        "InventSum",
+        "InventTable"
+      ],
+      "tiers": [
+        "A",
+        "A"
+      ],
+      "weakestTier": "A",
+      "why": "Reverse of InventTable \u2192 InventDim: ARBITRATED (was BOMVersion): BOMVersion only exists for manufactured items with a BOM, returning zero rows for purchased/traded items. InventSum is the universal stock bridge."
+    },
+    {
       "id": "inventtrans-inventsettlement-inv",
       "flow": "inv",
       "source": "InventTrans",
@@ -462,6 +905,23 @@
       ],
       "weakestTier": "A",
       "why": "Inventory transaction to its cost settlement."
+    },
+    {
+      "id": "inventsettlement-inventtrans-inv",
+      "flow": "inv",
+      "source": "InventSettlement",
+      "target": "InventTrans",
+      "maxHops": 2,
+      "bar": "top-10",
+      "canonical": [
+        "InventSettlement",
+        "InventTrans"
+      ],
+      "tiers": [
+        "A"
+      ],
+      "weakestTier": "A",
+      "why": "Reverse of InventTrans \u2192 InventSettlement: Inventory transaction to its cost settlement."
     },
     {
       "id": "inventtable-inventitemgroupitem-inv",
@@ -481,6 +941,23 @@
       "why": "Item to its item-group assignment."
     },
     {
+      "id": "inventitemgroupitem-inventtable-inv",
+      "flow": "inv",
+      "source": "InventItemGroupItem",
+      "target": "InventTable",
+      "maxHops": 2,
+      "bar": "top-10",
+      "canonical": [
+        "InventItemGroupItem",
+        "InventTable"
+      ],
+      "tiers": [
+        "A"
+      ],
+      "weakestTier": "A",
+      "why": "Reverse of InventTable \u2192 InventItemGroupItem: Item to its item-group assignment."
+    },
+    {
       "id": "inventsum-inventdim-inv",
       "flow": "inv",
       "source": "InventSum",
@@ -496,6 +973,23 @@
       ],
       "weakestTier": "A",
       "why": "On-hand to its dimension set."
+    },
+    {
+      "id": "inventdim-inventsum-inv",
+      "flow": "inv",
+      "source": "InventDim",
+      "target": "InventSum",
+      "maxHops": 2,
+      "bar": "top-10",
+      "canonical": [
+        "InventDim",
+        "InventSum"
+      ],
+      "tiers": [
+        "A"
+      ],
+      "weakestTier": "A",
+      "why": "Reverse of InventSum \u2192 InventDim: On-hand to its dimension set."
     },
     {
       "id": "projtable-projitemtrans-proj",
@@ -515,6 +1009,23 @@
       "why": "Direct on ProjId."
     },
     {
+      "id": "projitemtrans-projtable-proj",
+      "flow": "proj",
+      "source": "ProjItemTrans",
+      "target": "ProjTable",
+      "maxHops": 2,
+      "bar": "top-10",
+      "canonical": [
+        "ProjItemTrans",
+        "ProjTable"
+      ],
+      "tiers": [
+        "A"
+      ],
+      "weakestTier": "A",
+      "why": "Reverse of ProjTable \u2192 ProjItemTrans: Direct on ProjId."
+    },
+    {
       "id": "projtable-custtable-proj",
       "flow": "proj",
       "source": "ProjTable",
@@ -530,6 +1041,23 @@
       ],
       "weakestTier": "A",
       "why": "Direct on CustAccount."
+    },
+    {
+      "id": "custtable-projtable-proj",
+      "flow": "proj",
+      "source": "CustTable",
+      "target": "ProjTable",
+      "maxHops": 2,
+      "bar": "top-10",
+      "canonical": [
+        "CustTable",
+        "ProjTable"
+      ],
+      "tiers": [
+        "A"
+      ],
+      "weakestTier": "A",
+      "why": "Reverse of ProjTable \u2192 CustTable: Direct on CustAccount."
     },
     {
       "id": "projtable-projcosttrans-proj",
@@ -549,6 +1077,23 @@
       "why": "Direct on ProjId."
     },
     {
+      "id": "projcosttrans-projtable-proj",
+      "flow": "proj",
+      "source": "ProjCostTrans",
+      "target": "ProjTable",
+      "maxHops": 2,
+      "bar": "top-10",
+      "canonical": [
+        "ProjCostTrans",
+        "ProjTable"
+      ],
+      "tiers": [
+        "A"
+      ],
+      "weakestTier": "A",
+      "why": "Reverse of ProjTable \u2192 ProjCostTrans: Direct on ProjId."
+    },
+    {
       "id": "projtable-projempltrans-proj",
       "flow": "proj",
       "source": "ProjTable",
@@ -564,6 +1109,23 @@
       ],
       "weakestTier": "A",
       "why": "Direct on ProjId."
+    },
+    {
+      "id": "projempltrans-projtable-proj",
+      "flow": "proj",
+      "source": "ProjEmplTrans",
+      "target": "ProjTable",
+      "maxHops": 2,
+      "bar": "top-10",
+      "canonical": [
+        "ProjEmplTrans",
+        "ProjTable"
+      ],
+      "tiers": [
+        "A"
+      ],
+      "weakestTier": "A",
+      "why": "Reverse of ProjTable \u2192 ProjEmplTrans: Direct on ProjId."
     },
     {
       "id": "ledgerjournaltrans-ledgerjournaltable-rtr",
@@ -583,6 +1145,23 @@
       "why": "Direct line-to-header on JournalNum."
     },
     {
+      "id": "ledgerjournaltable-ledgerjournaltrans-rtr",
+      "flow": "rtr",
+      "source": "LedgerJournalTable",
+      "target": "LedgerJournalTrans",
+      "maxHops": 2,
+      "bar": "top-10",
+      "canonical": [
+        "LedgerJournalTable",
+        "LedgerJournalTrans"
+      ],
+      "tiers": [
+        "A"
+      ],
+      "weakestTier": "A",
+      "why": "Reverse of LedgerJournalTrans \u2192 LedgerJournalTable: Direct line-to-header on JournalNum."
+    },
+    {
       "id": "custtrans-ledgerjournaltrans-rtr",
       "flow": "rtr",
       "source": "CustTrans",
@@ -598,6 +1177,23 @@
       ],
       "weakestTier": "A",
       "why": "Customer transaction to the journal line that settled it."
+    },
+    {
+      "id": "ledgerjournaltrans-custtrans-rtr",
+      "flow": "rtr",
+      "source": "LedgerJournalTrans",
+      "target": "CustTrans",
+      "maxHops": 2,
+      "bar": "top-10",
+      "canonical": [
+        "LedgerJournalTrans",
+        "CustTrans"
+      ],
+      "tiers": [
+        "A"
+      ],
+      "weakestTier": "A",
+      "why": "Reverse of CustTrans \u2192 LedgerJournalTrans: Customer transaction to the journal line that settled it."
     },
     {
       "id": "vendtrans-ledgerjournaltrans-rtr",
@@ -617,6 +1213,23 @@
       "why": "Vendor transaction to the journal line that settled it."
     },
     {
+      "id": "ledgerjournaltrans-vendtrans-rtr",
+      "flow": "rtr",
+      "source": "LedgerJournalTrans",
+      "target": "VendTrans",
+      "maxHops": 2,
+      "bar": "top-10",
+      "canonical": [
+        "LedgerJournalTrans",
+        "VendTrans"
+      ],
+      "tiers": [
+        "A"
+      ],
+      "weakestTier": "A",
+      "why": "Reverse of VendTrans \u2192 LedgerJournalTrans: Vendor transaction to the journal line that settled it."
+    },
+    {
       "id": "ledgerjournaltrans-currency-rtr",
       "flow": "rtr",
       "source": "LedgerJournalTrans",
@@ -632,6 +1245,23 @@
       ],
       "weakestTier": "A",
       "why": "Direct on CurrencyCode."
+    },
+    {
+      "id": "currency-ledgerjournaltrans-rtr",
+      "flow": "rtr",
+      "source": "Currency",
+      "target": "LedgerJournalTrans",
+      "maxHops": 2,
+      "bar": "top-10",
+      "canonical": [
+        "Currency",
+        "LedgerJournalTrans"
+      ],
+      "tiers": [
+        "A"
+      ],
+      "weakestTier": "A",
+      "why": "Reverse of LedgerJournalTrans \u2192 Currency: Direct on CurrencyCode."
     },
     {
       "id": "mainaccount-ledgerjournaltrans-rtr",
@@ -651,6 +1281,25 @@
       ],
       "weakestTier": "A",
       "why": "ARBITRATED (was Currency): LedgerJournalTrans.LedgerDimension is an FK (RecId) to DimensionAttributeValueCombination, which holds MainAccount as an FK itself. That is the relational spine of the GL."
+    },
+    {
+      "id": "ledgerjournaltrans-mainaccount-rtr",
+      "flow": "rtr",
+      "source": "LedgerJournalTrans",
+      "target": "MainAccount",
+      "maxHops": 2,
+      "bar": "top-10",
+      "canonical": [
+        "LedgerJournalTrans",
+        "DimensionAttributeValueCombination",
+        "MainAccount"
+      ],
+      "tiers": [
+        "A",
+        "A"
+      ],
+      "weakestTier": "A",
+      "why": "Reverse of MainAccount \u2192 LedgerJournalTrans: ARBITRATED (was Currency): LedgerJournalTrans.LedgerDimension is an FK (RecId) to DimensionAttributeValueCombination, which holds MainAccount as an FK itself. That is the relational spine of the GL."
     }
   ]
 }
