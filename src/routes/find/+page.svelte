@@ -7,7 +7,7 @@
   import { fkLoadState, fkLoadError, loadFkMap, getAllFkTableNames } from '$lib/stores/fkMap'
   import { specificityLoadState, specificityLoadError, loadSpecificity } from '$lib/stores/specificity'
   import { findPaths as findPathsLegacy } from '$lib/pathfinder'
-  import { loadGraph, findPaths as findPathsTiered, setFlowCohorts, graphLoadState } from '$lib/pathEngine'
+  import { loadGraph, findPaths as findPathsTiered, setFlowCohorts, setFlowStages, graphLoadState } from '$lib/pathEngine'
   import { TOOLTIP_COPY, REASON_TOOLTIP_COPY, LEGEND_GROUPS } from '$lib/findLegendCopy'
   import { goto } from '$app/navigation'
   // ── M2 graph pane (TDD §4.1) ─────────────────────────────────────────────
@@ -41,9 +41,18 @@
   // has only the public seed map and must use the legacy scorer.
   let graphStatus = 'idle'
   let tierFilter = 'D'
-  let rankBy = 'evidence'
+  let rankBy = 'canonical'
   let copiedKey = ''
   $: graphAvailable = graphStatus === 'ready'
+
+  // Flagship scope: the six flows an analyst actually traces. Paths outside it
+  // still resolve (endpoints are always allowed) but are labelled best-effort,
+  // because only in-scope ranking has been verified.
+  let engineScope = null
+  // source|target -> arbitrated canonical chain. Loaded from the fixture file so
+  // the pins are data, not code.
+  let canonicalMap = new Map()
+  let canonicalReady = false
 
   const TIER_MEANING = {
     A: 'A — foreign key with an index: enforced by the database, safe to paste into X++',
@@ -59,16 +68,45 @@
    * search is exact — a bonus changes costs, it cannot evict an ungenerated path.
    * @returns {Map<string, number>}
    */
-  function buildFlowCohorts() {
-    const m = new Map()
+  function buildFlowScope() {
+    const cohorts = new Map()
+    const stages = new Map()
+    const scope = new Set()
     let stage = 0
     for (const flow of flows ?? []) {
+      if (!FLAGSHIP_FLOWS.has(flow.id)) continue
       for (const st of flow.stages ?? []) {
         const id = stage++
-        for (const t of st.tables ?? []) if (!m.has(t)) m.set(t, id)
+        for (const t of st.tables ?? []) {
+          scope.add(t)
+          if (!cohorts.has(t)) cohorts.set(t, id)
+          if (!stages.has(t)) stages.set(t, { flow: flow.id, stage: id })
+        }
       }
     }
-    return m
+    return { cohorts, stages, scope }
+  }
+
+  // The six flows whose ranking has been measured. hr and service are excluded
+  // deliberately: their defs are the least verified, and pretending otherwise
+  // would be the same class of error as the fabricated tableDefs.
+  const FLAGSHIP_FLOWS = new Set(['otc', 'p2p', 'ptp', 'inv', 'proj', 'rtr'])
+
+  /** Arbitrated canonical chains: source|target -> chain. */
+  async function loadCanonical() {
+    if (canonicalReady) return
+    try {
+      const res = await fetch('/data/canonical-fixtures.json')
+      if (!res.ok) return
+      const data = await res.json()
+      const m = new Map()
+      for (const p of data.pairs ?? []) m.set(p.source + '|' + p.target, p.canonical)
+      canonicalMap = m
+      canonicalReady = true
+    } catch {
+      // Absent fixture file is not an error: the site still works, just without
+      // pinned canonical paths.
+    }
   }
 
   /**
@@ -135,7 +173,11 @@
     }
     // Cohorts first (so the story profile has its stage adjacency), then the
     // artifact. A 404 is a normal state for a public clone, not an error.
-    setFlowCohorts(buildFlowCohorts())
+    const { cohorts, stages, scope } = buildFlowScope()
+    setFlowCohorts(cohorts)
+    setFlowStages(stages)
+    engineScope = scope
+    loadCanonical()
     loadGraph().then(() => {
       graphStatus = graphLoadState.status
     })
@@ -460,6 +502,10 @@
         maxResults: 50,
         minTier: tierFilter,
         rankBy,
+        scope: engineScope,
+        canonicalChains: canonicalMap.has(sourceTable + '|' + targetTable)
+          ? [canonicalMap.get(sourceTable + '|' + targetTable)]
+          : null,
       })
       results = r.results
       shortest = r.shortest
@@ -853,9 +899,9 @@
               title="Rank on D365FO metadata alone: join type, table group, deprecation"
               on:click={() => (rankBy = 'evidence')}>Evidence</button>
             <button type="button" class="sort-btn"
-              class:sort-active={rankBy === 'story'} aria-pressed={rankBy === 'story'}
-              title="Favour documented business flows: document-ID continuity and documented stages"
-              on:click={() => (rankBy = 'story')}>Story</button>
+              class:sort-active={rankBy === 'canonical'} aria-pressed={rankBy === 'canonical'}
+              title="Favour documented business flows: follow the ordered stages of the six core processes"
+              on:click={() => (rankBy = 'canonical')}>Story</button>
           </div>
         </fieldset>
       {:else}
@@ -922,7 +968,9 @@
       <div class="results-header">
         <p class="graph-notice" class:seed-notice={!graphAvailable}>
           {#if graphAvailable}
-            Paths verified against D365FO metadata: every hop is a declared relation, graded A–D by join strength.
+            Every hop is a declared D365FO relation, graded A–D by join strength. Ranking is verified for the six core
+            flows — sales, procurement, production, inventory, project, finance. Tables outside them still resolve, but
+            the order is best-effort.
           {:else}
             This build uses the public seed graph, derived from an older dataset — some relations may be stale or missing.
           {/if}
@@ -933,7 +981,7 @@
           {#if shortestHops !== null}
             · shortest <strong>{shortestHops}</strong> hop{shortestHops !== 1 ? 's' : ''}
           {/if}
-          · {#if graphAvailable}weakest join {tierFilter} · {rankBy === 'story' ? 'documented flows favoured' : 'metadata evidence only'}{:else if sortMode === 'shortest'}fewest hops first{:else}ranked by class &amp; score{/if}
+          · {#if graphAvailable}weakest join {tierFilter} · {rankBy === 'canonical' ? 'documented flows favoured' : 'metadata evidence only'}{:else if sortMode === 'shortest'}fewest hops first{:else}ranked by class &amp; score{/if}
         </span>
         <!-- Legend: badge explanations next to the results header (DESIGN.md
              §/find.5) — collapsed by default, dossier copy unchanged. -->
@@ -1135,6 +1183,11 @@
                      wins over curated; shortest badge dropped — it's the sort
                      mode, stated in the header). -->
                 {#if graphAvailable}
+                  {#if result.canonical}
+                    <span class="canonical-pin-badge" title="Arbitrated canonical path for this pair — verified by a D365FO domain owner, not produced by the ranking algorithm">
+                      canonical
+                    </span>
+                  {/if}
                   {#if result.joinable}
                     <button
                       type="button"
@@ -2227,6 +2280,16 @@
     font-size: 0.72rem;
     color: var(--dim, #7b8698);
   }
+  .canonical-pin-badge {
+    margin-left: 0.5rem;
+    padding: 0.05rem 0.45rem;
+    border-radius: 999px;
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--ok, #2f9e5f);
+    border: 1px solid currentColor;
+  }
+
   .graph-notice.seed-notice {
     padding: 0.35rem 0.55rem;
     border-left: 2px solid var(--warn, #c08a2e);
