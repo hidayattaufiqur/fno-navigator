@@ -1,42 +1,32 @@
 // Copy deck for the /find page tooltips and legend.
 //
-// Source of truth: find-legend-copy.md (secretary dossier, task t_a3bcdfef).
+// Source of truth: find-legend-copy.md (secretary dossier, card t_96e72178).
 // This module mirrors that file VERBATIM — copy changes only via the dossier.
 // tests/check-legend-copy.mjs asserts the two never drift.
+//
+// Rewritten 2026-11-19 for the tiered engine: the previous deck documented
+// pathScoring.js (qualityClass, weighted score, reason chips), which no longer
+// runs. REASON_TOOLTIP_COPY was deleted with it — no reason chips exist.
 
 // ── General tooltip one-liners (12 words or fewer each) ──────────────────────
 
 export const TOOLTIP_COPY = {
-  'business-flow': 'Follows a document flow with continuous document IDs.',
-  curated: 'Verified by the app team, pinned from the dataset, not algorithm-ranked.',
-  'cleanest-path': 'The #1 row under class, score, and hop ranking.',
-  shortest: 'This path uses the fewest verified FK hops found.',
-  'shortest-hops': 'Fewest verified FK hops, independent of business meaning.',
-  'ranked-by-class-score': 'Class shows quality tier. Score totals weighted evidence.',
-  'reason-chips': "Each chip names evidence behind this path's rank.",
-  'sampled-note': 'Best paths found in a limited search sample, not exhaustive.',
-  'missing-note': 'The named table is absent from the dataset.',
-  'canonical-hint': 'A verified canonical path needs more hops than selected.',
-  'known-canonical': 'Verified chain pinned from documented flows, not algorithm-ranked.',
+  'canonical': 'Arbitrated chain for this pair — verified by a D365FO domain owner.',
+  'inferred': 'Algorithm-ranked fallback: no arbitrated canonical chain for this pair.',
+  'bridge-cartesian': 'Both neighbours join the same field, so rows pair up freely.',
+  'bridge-setup': 'Broad setup table used as a bridge; rows may multiply.',
+  'weakest-hop': 'Weakest tier in this chain; not safe to paste as a join.',
+  'copy-xpp': 'Copies this chain as a select-join; every hop is an indexed FK.',
+  'rank-story': 'Ranks by documented stage order from the six core flows.',
+  'rank-evidence': 'Ranks on AOT metadata alone: join tier, table group, deprecation.',
+  'shortest-hops': 'Fewest hops in the relation graph, regardless of business meaning.',
+  'truncated-note': 'More ranked paths exist; these are the highest-ranked ones.',
+  'missing-note': 'The named table is not in the loaded graph.',
+  'canonical-hint': 'A pinned chain for this pair needs more hops than selected.',
+  'known-canonical': 'Chain pinned from the validated fixture set for this pair.',
 }
 
-// ── Per-reason-code tooltip one-liners (keyed by pathScoring.js codes) ───────
-
-export const REASON_TOOLTIP_COPY = {
-  'business-flow-pattern': 'Follows a document flow.',
-  'document-id-continuity': 'Document IDs stay continuous across hops.',
-  'named-reference-joins': 'Named reference joins, with no anonymous record ID.',
-  'business-key-joins': 'Uses a business-key path.',
-  'generic-lookup-intermediate': 'Passes through a generic lookup.',
-  'curated-tables': 'Passes curated tables.',
-  'rare-relations': 'Uses rare relation fields.',
-  'common-relations': 'Uses common relation fields.',
-  'weak-semantic-signal': 'Weak semantic signal.',
-  'plumbing-detour': 'Contains a plumbing detour.',
-  'same-table': 'Same table on both ends.',
-}
-
-// ── Legend groups (Path ranking / Path quality / Notes) ──────────────────────
+// ── Legend groups (Path ranking / Join quality / Notes) ──────────────────────
 // Section bodies keep the dossier's backticks; the page renders them as <code>.
 
 export const LEGEND_GROUPS = [
@@ -44,57 +34,55 @@ export const LEGEND_GROUPS = [
     heading: 'Path ranking',
     sections: [
       {
-        title: 'Cleanest path and Top-ranked path',
+        title: 'Story vs Evidence',
         body: [
-          'The `cleanest path` marker identifies row #1 in the current result list. The ranking compares class first, then score, then hop count, with deterministic tie-breakers after that. It does not mean the path is shortest or universally best.',
+          '`Story` ranks by documented stage progression: the ordered stages of the six core flows in `flows.ts`, so a chain that advances through one process outranks one that walks backwards or jumps between flows. `Evidence` drops that signal and ranks on AOT metadata alone. Both sort on the chain\'s weakest tier, then `cost`, then hop count; `Story` just puts stage progression ahead of all three. Both read the same enumeration, so switching profiles reorders the list without changing which paths are in it.',
         ],
       },
       {
         title: 'Shortest: N hops',
         body: [
-          '`Shortest: N hops` counts the fewest verified foreign-key hops between the selected tables. It measures distance in the relationship graph, so a shorter path can still be less useful as a business route.',
+          '`Shortest: N hops` is the fewest hops any returned chain uses between the two tables, counted in the relation graph rather than in foreign keys alone, so tier C and tier D hops count. It measures distance, not usefulness: the shortest chain can still be the wrong business route.',
         ],
       },
       {
-        title: 'Ranked by class and score',
+        title: 'Canonical and inferred',
         body: [
-          'Class means path quality tier. Score totals weighted evidence used within that tier. The caption describes the ordering method, not a guarantee that the first row matches a documented business process.',
+          'A row marked `canonical` is the chain arbitrated by a D365FO domain owner for this table pair, pinned from `canonical-fixtures.json` and moved to the top of the list whatever the algorithm rank says. Its tooltip is that chain\'s `why` note, which states the posting or document step the hop sequence follows. Every other row is marked `inferred`: the ranking produced it and no arbitrated chain exists for the pair. Ranking signals cannot recover business intent on their own, which is why a pinned answer outranks them.',
+          '`Known canonical path` is the same knowledge outside the ranking. That block holds the must-surface chains of the validated fixtures for this pair, shown whether or not the ranking reaches them, because an asserted chain can rank below the top N and still be the right answer. Rows already in the list are not repeated there; they carry the `canonical` pill instead. If a chain is longer than the current hop limit the page says so and names the hop count: raise max hops and it can be enumerated and pinned.',
         ],
       },
     ],
   },
   {
-    heading: 'Path quality',
+    heading: 'Join quality',
     sections: [
       {
-        title: 'Business flow',
+        title: 'Tier chips A–D',
         body: [
-          '`Business flow` marks a class-3 path that follows a coherent document route, such as Master → Transaction → Origin → Document Line → Party. Document IDs remain continuous across the hops. This is the algorithm\'s highest-confidence signal that the path follows the natural business route.',
+          'Every hop carries a tier chip graded from the declared AOT relation. The chip tooltip, the Minimum join filter and the chain\'s own verdict all use the same wording, and the lowest tier in the chain decides whether the row gets `Copy X++` or `weakest hop X`.',
+          'A — foreign key with an index: enforced by the database, safe to paste into X++',
+          'B — foreign key declared, no index: a real relation, a query may need to scan',
+          'C — conditional relation: the join also constrains a discriminator field',
+          'D — convention only: no foreign key declared for this relation',
         ],
       },
       {
-        title: 'Curated',
+        title: 'Weakest hop',
         body: [
-          '`curated` marks a pinned canonical example selected by the app team. The team verified it against the dataset and documented business flows. It is editorial knowledge, not algorithm output, so a curated path can appear beside an algorithm-ranked row.',
+          '`weakest hop X` names the lowest tier in a chain that is not fully joinable, and it is the reason that row has no `Copy X++` button. One hop weaker than an indexed foreign key means a pasted join may scan the table, or in the conditional case may omit the discriminator and match the wrong rows.',
         ],
       },
       {
-        title: 'Reason chips',
+        title: 'Bridge warnings',
         body: [
-          'Each reason chip names one piece of evidence behind the path\'s class or score, with positive chips pointing to document structure, named joins, business keys, curated tables, or rare relations and caution chips flagging generic lookups, common relations, weak semantic signals, plumbing detours, or a same-table path. Paths that avoid generic references avoid that penalty. The current map expresses the generic-reference case as `passes through a generic lookup`, and the pinned canonical example is represented by the separate `curated` badge.',
+          'A `⚠ table` flag means the path enters that table in a way that can multiply rows. The cartesian case is both neighbours joining the table on the same field, as `SalesTable > Currency > CustTrans` does on `CurrencyCode`: every sales order then pairs with every customer transaction sharing a currency. The quieter `setup-bridge` case is a broad Group, Reference or Parameter table used as a bridge. Read either flag as an instruction to check the where conditions, not as a rejected path.',
         ],
-        table: [
-          { code: 'business-flow-pattern', chip: 'follows a document flow', meaning: 'The tables follow a recognizable business document sequence.' },
-          { code: 'document-id-continuity', chip: 'document IDs stay continuous across hops', meaning: 'Each hop keeps the document identity connected.' },
-          { code: 'named-reference-joins', chip: 'named reference joins (no anonymous record ID)', meaning: 'The joins use named references instead of an anonymous record ID.' },
-          { code: 'business-key-joins', chip: 'business-key path', meaning: 'The path uses a meaningful business key.' },
-          { code: 'generic-lookup-intermediate', chip: 'passes through a generic lookup', meaning: 'A broad lookup table sits between the selected tables.' },
-          { code: 'curated-tables', chip: 'passes curated tables', meaning: 'The path crosses tables marked as useful in the dataset.' },
-          { code: 'rare-relations', chip: 'uses rare relation fields', meaning: 'The path uses less common relation fields.' },
-          { code: 'common-relations', chip: 'uses common relation fields', meaning: 'The path uses widely shared relation fields.' },
-          { code: 'weak-semantic-signal', chip: 'weak semantic signal', meaning: 'The table names provide limited evidence of a meaningful link.' },
-          { code: 'plumbing-detour', chip: 'contains a plumbing detour', meaning: 'The path takes an indirect technical route.' },
-          { code: 'same-table', chip: 'same table on both ends', meaning: 'The selected source and target are the same table.' },
+      },
+      {
+        title: 'Copy X++',
+        body: [
+          '`Copy X++` appears only on all-tier-A chains, where every hop is an indexed foreign key and the database enforces the join. The snippet is a `select` with one `join` per hop, oriented in traversal direction, and it is paste-safe as written. A chain with any B, C or D hop gets `weakest hop X` instead, because the generated join would not be equivalent to the path shown.',
         ],
       },
     ],
@@ -103,27 +91,21 @@ export const LEGEND_GROUPS = [
     heading: 'Notes',
     sections: [
       {
-        title: 'Search space sampled, showing N of M+',
+        title: 'Top N shown',
         body: [
-          '`Search space sampled: showing N of many more possible paths` means the search explored a limited sample of possible paths. The displayed rows are the best paths found in that sample, not an exhaustive list.',
+          '`Top N shown` is a display fact, not a warning. Within the scoped subgraph the search enumerates every simple path up to the hop limit and returns the first N of that ranking, so the list is a slice of a complete ordering rather than a sample. Lower the hop limit or raise the minimum join to shorten it. Both endpoints are always allowed, so a table outside the scoped flows still resolves as a destination.',
         ],
       },
       {
-        title: 'X is not in the dataset',
+        title: 'Table not in the graph',
         body: [
-          '`X is not in the dataset` means the named table was not found in the 5,587-table dataset. Check spelling and capitalization before searching again.',
+          '`X is not in the graph` means the name was not found in the graph this build loaded. On the AOT artifact that graph has 27,582 nodes, so a missing name is usually a typo or a table newer than the artifact. Check spelling and capitalization first: table names are case-sensitive.',
         ],
       },
       {
-        title: 'Canonical path exists at N hops',
+        title: 'Which graph is in use',
         body: [
-          '`A canonical path for this pair exists at N hops` means a verified canonical chain is available, but it exceeds the selected hop limit. Increase max hops to include it.',
-        ],
-      },
-      {
-        title: 'Known canonical path',
-        body: [
-          'A `Known canonical path` is a verified chain pinned from the fixture set for this table pair. It is shown as curated knowledge and is not ranked by the search algorithm. Semantically required legs may rank outside the top results by design when they route through shared hubs such as `TaxGroupHeading`. If an expected leg is missing from the ranked rows, check the pinned `Known canonical path` entries for the pair.',
+          'Every claim above is about the AOT artifact, and whether this build loaded it is the page\'s `graphAvailable` flag. With the artifact present, each hop is a declared D365FO relation graded A–D, and ranking is verified for the six core flows — sales, procurement, production, inventory, project, finance. Tables outside them still resolve, but the order is best-effort. Without the artifact, as in a public clone with no licensed environment, the page runs on the public seed graph and says so: relations may be stale, tiers and bridge detection do not apply, and an older scorer answers instead.',
         ],
       },
     ],

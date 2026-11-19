@@ -9,11 +9,7 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
-import {
-  TOOLTIP_COPY,
-  REASON_TOOLTIP_COPY,
-  LEGEND_GROUPS,
-} from '../src/lib/findLegendCopy.js'
+import { TOOLTIP_COPY, LEGEND_GROUPS } from '../src/lib/findLegendCopy.js'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const md = readFileSync(join(root, 'find-legend-copy.md'), 'utf8')
@@ -67,7 +63,9 @@ const tables = parseTables(md)
 // ── Tooltip tables ───────────────────────────────────────────────────────────
 
 const generalTable = tables.find((t) => t.header[0] === 'UI label' && t.header[1] === 'Tooltip copy')
-const reasonTable = tables.find((t) => t.header[0] === 'Code' && t.header[1] === 'Tooltip copy')
+// No reason-chip tooltips exist in the tiered engine, so the deck has no second
+// table and there is nothing to compare. Removed 2026-11-19 with the retired
+// pathScoring.js vocabulary.
 
 if (!generalTable) { errors.push('General tooltip table not found in md'); }
 else {
@@ -80,16 +78,6 @@ else {
   expectedCopies.forEach((copy, i) => {
     check(`general tooltip value #${i + 1}`, copy, actualCopies[i])
   })
-}
-
-if (!reasonTable) { errors.push('Reason tooltip table not found in md'); }
-else {
-  const expectedReason = new Map(reasonTable.rows.map(([code, copy]) => [stripCode(code), copy]))
-  check('reason tooltip key count', expectedReason.size, Object.keys(REASON_TOOLTIP_COPY).length)
-  for (const [code, copy] of expectedReason) {
-    if (!(code in REASON_TOOLTIP_COPY)) { errors.push(`MISSING reason tooltip key: ${code}`); continue }
-    check(`reason tooltip [${code}]`, copy, REASON_TOOLTIP_COPY[code])
-  }
 }
 
 // ── Legend groups and sections ───────────────────────────────────────────────
@@ -148,7 +136,7 @@ for (const g of expectedGroups) {
 // ── Sanity: every tooltip is 12 words or fewer (dossier claim) ───────────────
 
 const wordCount = (s) => s.trim().split(/\s+/).length
-for (const [k, v] of Object.entries({ ...TOOLTIP_COPY, ...REASON_TOOLTIP_COPY })) {
+for (const [k, v] of Object.entries(TOOLTIP_COPY)) {
   if (wordCount(v) > 12) errors.push(`tooltip [${k}] is ${wordCount(v)} words (max 12): ${v}`)
 }
 
@@ -160,6 +148,6 @@ if (errors.length) {
   process.exit(1)
 }
 
-const totalTooltips = Object.keys(TOOLTIP_COPY).length + Object.keys(REASON_TOOLTIP_COPY).length
+const totalTooltips = Object.keys(TOOLTIP_COPY).length
 const totalSections = LEGEND_GROUPS.reduce((n, g) => n + g.sections.length, 0)
 console.log(`✓ copy verbatim: ${totalTooltips} tooltips, ${LEGEND_GROUPS.length} groups, ${totalSections} sections, all ≤12 words`)

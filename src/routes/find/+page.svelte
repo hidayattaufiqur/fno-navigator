@@ -8,7 +8,7 @@
   import { specificityLoadState, specificityLoadError, loadSpecificity } from '$lib/stores/specificity'
   import { findPaths as findPathsLegacy } from '$lib/pathfinder'
   import { loadGraph, findPaths as findPathsTiered, setFlowCohorts, setFlowStages, graphLoadState } from '$lib/pathEngine'
-  import { TOOLTIP_COPY, REASON_TOOLTIP_COPY, LEGEND_GROUPS } from '$lib/findLegendCopy'
+  import { TOOLTIP_COPY, LEGEND_GROUPS } from '$lib/findLegendCopy'
   import { goto } from '$app/navigation'
   // ── M2 graph pane (TDD §4.1) ─────────────────────────────────────────────
   import ForceGraph3D from '$lib/components/ForceGraph3D.svelte'
@@ -820,9 +820,10 @@
     <p class="eyebrow">Dynamics 365 Finance &amp; Operations</p>
     <h2>Find Table Path</h2>
     <p class="lede">
-      Find how two D365FO tables connect through foreign keys. Uses
-      <strong>43,616 verified associations</strong> across 5,587 tables — the full Microsoft Dynamics
-      database graph.
+      {#if graphAvailable}Find how two D365FO tables connect through declared relations. Uses the AOT relation
+        graph: <strong>27,582 nodes</strong> and 58,310 graded hops, derived from Microsoft metadata.{:else}Find how two
+        D365FO tables connect through foreign keys. This build runs on the public seed graph
+        (<strong>43,616 relations</strong> across 5,587 tables), which can be stale or incomplete.{/if}
     </p>
   </div>
 </header>
@@ -995,7 +996,7 @@
   {#if searchState === 'done'}
     {#if missing.length > 0}
       <div class="finder-empty">
-        <p data-tip={TOOLTIP_COPY['missing-note']} tabindex="0" aria-describedby="find-tip"><strong>{missing.join(', ')}</strong> {missing.length === 1 ? 'is' : 'are'} not in the 5,587-table dataset.</p>
+        <p data-tip={TOOLTIP_COPY['missing-note']} tabindex="0" aria-describedby="find-tip"><strong>{missing.join(', ')}</strong> {missing.length === 1 ? 'is' : 'are'} not in the {#if graphAvailable}27,582-node AOT graph{:else}5,587-table seed graph{/if}.</p>
         <p class="mini">Check the spelling, then try again. Table names are case-sensitive (for example SalesLine, CustTable).</p>
         <p class="mini">
           {#each missing as name, i}
@@ -1077,7 +1078,7 @@
           tabindex="0"
           aria-describedby="find-tip"
         >{graphAvailable
-            ? `Top ${pathResults.length} shown — the search stopped once no remaining path could beat those already found.`
+            ? `Top ${pathResults.length} shown — more ranked paths exist for this pair.`
             : `Search space sampled: showing ${pathResults.length} of many more possible paths. Reduce max hops for a shorter list.`}</p>
       {/if}
     {/if}
@@ -1100,7 +1101,7 @@
             tabindex="0"
             aria-describedby="find-tip"
           >Known canonical path</span>
-          <span class="canonical-caption">Curated knowledge: a verified chain for this pair, pinned from the fixture set — not algorithm-ranked</span>
+          <span class="canonical-caption">Curated knowledge: a validated chain for this pair, pinned from the fixture set, not algorithm-ranked</span>
           {#if canonicalHint}
             <span class="canonical-caption" data-tip={TOOLTIP_COPY['canonical-hint']} tabindex="0" aria-describedby="find-tip">
               · a {canonicalHint.hops}-hop canonical path also exists
@@ -1231,15 +1232,12 @@
                   {#if result.canonical}
                     <span
                       class="canonical-pin-badge"
-                      title={canonicalWhy.get(sourceTable + '|' + targetTable) ||
-                        'Arbitrated canonical path for this pair — verified by a D365FO domain owner, not produced by the ranking algorithm'}
+                      title={canonicalWhy.get(sourceTable + '|' + targetTable) || TOOLTIP_COPY.canonical}
                     >
                       canonical
                     </span>
                   {:else if graphAvailable}
-                    <span class="inferred-badge" title="Algorithm-ranked fallback: no arbitrated canonical path exists for this pair. Check the where conditions before relying on the join.">
-                      inferred
-                    </span>
+                    <span class="inferred-badge" title={TOOLTIP_COPY.inferred}>inferred</span>
                   {/if}
                   {#if result.joinable}
                     <button
@@ -1293,9 +1291,7 @@
                   {#each result.bridges as br}
                     <span
                       class="bridge-flag"
-                      title="Risk: {br.reason === 'same-field-cartesian'
-                        ? `Both neighbours join ${br.table} on the same field (${br.field}), so rows pair up freely — this is a cartesian product, not a relationship. Verify the join before relying on it.`
-                        : `${br.table} is a broad setup table used as a bridge; the result may multiply rows.`}"
+                      title={br.reason === 'same-field-cartesian' ? TOOLTIP_COPY['bridge-cartesian'] : TOOLTIP_COPY['bridge-setup']}
                     >⚠ {br.table}</span>
                   {/each}
                 </div>
@@ -1337,7 +1333,7 @@
                     <span
                       class="reason-chip"
                       role="listitem"
-                      data-tip={REASON_TOOLTIP_COPY[code] ?? REASON_LABELS[code] ?? code}
+                      data-tip={REASON_LABELS[code] ?? code}
                       tabindex="0"
                       aria-describedby="find-tip"
                     >{REASON_LABELS[code] ?? code}</span>
