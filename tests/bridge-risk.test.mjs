@@ -59,14 +59,20 @@ const check = (name, fn) => {
   }
 }
 
-check('SalesTable>Currency>CustTrans warns same-field-cartesian', () => {
+check('setup hub is never an intermediate: SalesTable>Currency>CustTrans no longer exists', () => {
+  // The ban (pathEngine isBannedIntermediate) removed this detour from the
+  // enumeration entirely, so there is no bridge left to label. The hazard is
+  // gone by construction, which is why this replaced the old WARN assertion.
   const r = findPaths('SalesTable', 'CustTrans', { maxHops: 2, scope: SCOPE, rankBy: 'evidence' })
   const hit = r.results.find((x) => x.key === 'SalesTable>Currency>CustTrans')
-  assert.ok(hit, 'the currency-bridge path must be in the result set')
-  const br = hit.bridges?.find((b) => b.table === 'Currency')
-  assert.ok(br, 'Currency hop must be flagged')
-  assert.equal(br.reason, 'same-field-cartesian')
-  assert.match(String(br.field).toLowerCase(), /currency/)
+  assert.ok(!hit, 'Currency must never appear as an intermediate')
+})
+
+check('a setup hub is still a legal ENDPOINT', () => {
+  // Banned as a mid-path step only: `SalesTable → Currency` is a real answer.
+  const r = findPaths('SalesTable', 'Currency', { maxHops: 4, scope: SCOPE, rankBy: 'canonical' })
+  assert.equal(r.shortest, 1, 'direct SalesTable>Currency relation must survive')
+  assert.equal(r.results[0]?.key, 'SalesTable>Currency')
 })
 
 check('SalesLine>InventTransOrigin>InventTrans stays silent', () => {

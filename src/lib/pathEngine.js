@@ -81,6 +81,70 @@ const DOC_ID_BONUS = -3
 
 /** table name -> stage id, supplied by the caller from flows.ts */
 let cohortOf = new Map()
+
+/**
+ * ── SETUP-HUB INTERMEDIATE BAN ────────────────────────────────────────────
+ * Broad setup/lookup tables are never a step in a business chain: `Currency`
+ * (degree 1147), `InventLocation` (549), `TaxTable` (265) are referenced by
+ * hundreds of tables, so routing THROUGH one joins two documents on a shared
+ * code — a cartesian product, not a relationship. Measured 2026-11-19: banning
+ * them as intermediates changes 0 of the 74 canonical pins (they appear in
+ * zero pins at every threshold from 50 to 500), so the detours can be removed
+ * instead of merely labelled.
+ *
+ * BOTH clauses are required. TableGroup alone matches 2,479 tables including
+ * tiny 2-row lookups that are harmless and sometimes the only bridge.
+ *
+ * ENDPOINTS ARE ALWAYS ALLOWED: `SalesTable → Currency` must still answer, and
+ * `Currency` stays a node for lookup questions. Only mid-path usage is banned.
+ */
+const SETUP_GROUPS = new Set(['Group', 'Reference', 'Parameter'])
+const INTERMEDIATE_HUB_DEGREE = 100
+
+/**
+ * Escape hatch: table names re-admitted as path intermediates despite the ban,
+ * for a legitimate bridge discovered later. Add the exact table name, one per
+ * entry. Keeping this named (rather than inlining an exception in the
+ * predicate) means the next bridge is a one-line change, not a re-derivation.
+ * @type {Set<string>}
+ */
+export const INTERMEDIATE_ALLOWLIST = new Set([])
+
+/**
+ * Hazards the group clause structurally CANNOT catch, banned by name.
+ *
+ * These are `TableGroup=Main` — real master/transaction data, not setup — so
+ * widening the predicate to include `Main` would also ban `CustTable` (545),
+ * `DimensionAttributeValueCombination` (576) and `InventSum`, the first two of
+ * which are canonical PIN intermediates. Hence a name list, not a group.
+ *
+ * They are cartesian bridges measured 2026-11-19 (fanIn / same-field shapes):
+ *   InventDim              fanIn 433  shapes 244,216  — `SalesLine → InventDim
+ *     → InventTrans` joins two documents on `inventDimId`
+ *   UnitOfMeasure          fanIn 355  shapes 170,438
+ *   LogisticsPostalAddress fanIn 150  shapes  45,606
+ *
+ * 0 of 74 pins use any of them as an INTERMEDIATE (InventDim is an ENDPOINT in
+ * 4 pins, which stays allowed). If a future export reclassifies one as setup,
+ * the group clause starts catching it and its entry here becomes redundant,
+ * not wrong — harmless either way.
+ *
+ * @type {Set<string>}
+ */
+export const BANNED_INTERMEDIATES_BY_NAME = new Set([
+  'InventDim',
+  'UnitOfMeasure',
+  'LogisticsPostalAddress',
+])
+
+/** @param {string} t */
+function isBannedIntermediate(t) {
+  if (INTERMEDIATE_ALLOWLIST.has(t)) return false
+  if (BANNED_INTERMEDIATES_BY_NAME.has(t)) return true
+  const node = state.nodes.get(t)
+  if (!node) return false
+  return SETUP_GROUPS.has(String(node.group ?? '')) && (node.degree ?? 0) > INTERMEDIATE_HUB_DEGREE
+}
 /** table name -> {flow, stage} for stage-progression ranking */
 let stageOf = new Map()
 
@@ -544,7 +608,11 @@ export function findPaths(
    * the answer best-effort.
    * @param {string} t
    */
-  const usable = (t) => !scope || scope.has(t) || t === target || t === source
+  const usable = (t) => {
+    if (t === target || t === source) return true
+    if (isBannedIntermediate(t)) return false
+    return !scope || scope.has(t)
+  }
 
   /** @type {PathResult[]} */
   const found = []
