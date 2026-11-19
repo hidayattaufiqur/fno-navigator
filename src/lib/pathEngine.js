@@ -111,6 +111,42 @@ const INTERMEDIATE_HUB_DEGREE = 100
 export const INTERMEDIATE_ALLOWLIST = new Set([])
 
 /**
+ * ── MASTER-KEY HUB BAN ────────────────────────────────────────────────────
+ * `TableGroup=Main` hubs reached by a shared BUSINESS KEY are cartesian bridges:
+ * joining through `VendTable.AccountNum` or `InventTable.ItemId` matches every
+ * transaction that vendor or item ever had, not the one on this document.
+ * `PurchTable > VendTable > VendTrans` and `SalesLine > InventTable > InventTrans`
+ * are exactly this shape and survive the setup-group clause.
+ *
+ * The discriminator is SURROGATE-ness, not fan-in and not same-field dominance.
+ * Measured 2026-11-19, share of incident edges that join on `RecId`/*RecId:
+ *
+ *   VendTable      3%   BAN    AccountNum — N:M over vendor history
+ *   InventTable    1%   BAN    ItemId     — N:M over item history
+ *   CustTable      3%   BAN    AccountNum
+ *   InventDim      1%   BAN    inventDimId
+ *   ProjTable      5%   BAN    ProjId
+ *   UnitOfMeasure 16%   keep
+ *   CompanyInfo   40%   keep
+ *   HcmWorker     73%   keep
+ *   DAVC          99%   keep   RecId — resolves to ONE row
+ *
+ * A RecId join is 1:1 and safe; a business-key join is shared and multiplies.
+ * Two earlier candidate rules were measured and REJECTED:
+ *   - same-field dominance (enter+leave on the same column): DAVC scores 99% and
+ *     VendTable 81%, so it bans the legitimate pin intermediate before the
+ *     hazard. The ratio runs backwards.
+ *   - raw fan-in: breaks 12 of 74 pins at every threshold, because pin
+ *     intermediates (DAVC 576, SalesTable 261) are high-fan-in but not hazards.
+ *
+ * The setup-group clause above must stay too: `InventItemLocation` is a pin
+ * intermediate with 0% surrogate share but degree 13, so this rule needs the
+ * degree gate to spare it.
+ */
+const SURROGATE_SHARE_MAX = 0.1
+const MASTER_KEY_MIN_DEGREE = 100
+
+/**
  * Hazards the group clause structurally CANNOT catch, banned by name.
  *
  * These are `TableGroup=Main` — real master/transaction data, not setup — so
@@ -143,7 +179,17 @@ function isBannedIntermediate(t) {
   if (BANNED_INTERMEDIATES_BY_NAME.has(t)) return true
   const node = state.nodes.get(t)
   if (!node) return false
-  return SETUP_GROUPS.has(String(node.group ?? '')) && (node.degree ?? 0) > INTERMEDIATE_HUB_DEGREE
+  const degree = node.degree ?? 0
+  // 1. Broad setup/lookup table (Currency, InventLocation, TaxTable ...).
+  if (SETUP_GROUPS.has(String(node.group ?? '')) && degree > INTERMEDIATE_HUB_DEGREE) return true
+  // 2. Master-data table reached by a shared business key (VendTable, InventTable).
+  //    Degrees below the gate are spared on purpose: InventItemLocation is a pin
+  //    intermediate at 0% surrogate share, but only degree 13.
+  if (String(node.group) === 'Main' && degree > MASTER_KEY_MIN_DEGREE) {
+    const share = state.surrogateShare.get(t)
+    if (share !== undefined && share < SURROGATE_SHARE_MAX) return true
+  }
+  return false
 }
 /** table name -> {flow, stage} for stage-progression ranking */
 let stageOf = new Map()
@@ -176,7 +222,7 @@ export function setFlowStages(map) {
  */
 
 /** @type {{ready: boolean, nodes: Map<string, any>, out: Map<string, GEdge[]>, meta: any}} */
-const state = { ready: false, nodes: new Map(), out: new Map(), meta: null, customSkipped: 0 }
+const state = { ready: false, nodes: new Map(), out: new Map(), meta: null, customSkipped: 0, surrogateShare: new Map() }
 
 export const graphLoadState = { status: 'idle', error: '' }
 
@@ -205,6 +251,38 @@ export async function loadGraph(url = '/data/graph-compact.json') {
     graphLoadState.error = err instanceof Error ? err.message : String(err)
     return false
   }
+}
+
+/**
+ * Share of each table's incoming/outgoing edges that join on `RecId` or a
+ * `*RecId` surrogate. Low share = the table is reached by a shared business key,
+ * so routing through it multiplies rows. See MASTER-KEY HUB BAN for the numbers.
+ * @param {any} raw
+ * @returns {Map<string, number>}
+ */
+function computeSurrogateShare(raw) {
+  // Edges are POSITIONAL rows, not name-keyed objects: `edgeSchema` carries the
+  // field NAMES for the header only. Indexing row[edgeSchema[i]] yields undefined
+  // and silently disables the rule, so read by offset.
+  const CHILD = 0
+  const CHILD_FIELD = 1
+  const PARENT = 2
+  const PARENT_FIELD = 3
+  const totals = new Map() // table -> [surrogateEdges, allEdges]
+  const bump = (t, field) => {
+    let e = totals.get(t)
+    if (!e) totals.set(t, (e = [0, 0]))
+    e[1]++
+    const f = String(field).toLowerCase()
+    if (f === 'recid' || f.endsWith('recid')) e[0]++
+  }
+  for (const row of raw.edges) {
+    bump(row[PARENT], row[PARENT_FIELD])
+    bump(row[CHILD], row[CHILD_FIELD])
+  }
+  const out = new Map()
+  for (const [t, [sur, all]] of totals) out.set(t, all ? sur / all : 0)
+  return out
 }
 
 /** @param {any} raw */
@@ -249,6 +327,7 @@ function indexGraph(raw) {
     })
   }
   state.customSkipped = customSkipped
+  state.surrogateShare = computeSurrogateShare(raw)
 
   let ei = 0
   for (const row of raw.edges) {
