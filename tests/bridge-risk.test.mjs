@@ -1,0 +1,102 @@
+#!/usr/bin/env node
+/**
+ * Gate for the bridge-risk rule: it must warn on the real hazard and stay
+ * silent on the legitimate bridge.
+ *
+ *   WARN : SalesTable > Currency > CustTrans      (same-field cartesian)
+ *   SILENT : SalesLine > InventTransOrigin > InventTrans  (RecId in, InventTransId out)
+ *
+ * Run: node tests/bridge-risk.test.mjs
+ */
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import assert from 'node:assert/strict'
+
+const ROOT = join(import.meta.dirname, '..')
+globalThis.fetch = async () => ({
+  ok: true,
+  status: 200,
+  json: async () => JSON.parse(readFileSync(join(ROOT, 'static/data/graph-compact.json'), 'utf8')),
+})
+
+const { loadGraph, findPaths, setFlowCohorts, setFlowStages } = await import(join(ROOT, 'src/lib/pathEngine.js'))
+
+// scope + stages, same as the app
+const src = readFileSync(join(ROOT, 'src/lib/data/flows.ts'), 'utf8')
+const FLAGSHIP = ['otc', 'p2p', 'ptp', 'inv', 'proj', 'rtr']
+const marks = [...src.matchAll(/^    id: '([^']+)',$/gm)].map((m) => ({ id: m[1], at: m.index }))
+const SCOPE = new Set()
+const COHORTS = new Map()
+const STAGES = new Map()
+for (let i = 0; i < marks.length; i++) {
+  if (!FLAGSHIP.includes(marks[i].id)) continue
+  const end = marks[i + 1] ? marks[i + 1].at : src.length
+  let st = 0
+  for (const t of src.slice(marks[i].at, end).matchAll(/tables:\s*\[([^\]]+)\]/g)) {
+    const stage = st++
+    for (const r of t[1].split(',')) {
+      const n = r.trim().replace(/^['"]|['"]$/g, '')
+      if (!n) continue
+      SCOPE.add(n)
+      if (!COHORTS.has(n)) COHORTS.set(n, stage)
+      if (!STAGES.has(n)) STAGES.set(n, { flow: marks[i].id, stage })
+    }
+  }
+}
+await loadGraph()
+setFlowCohorts(COHORTS)
+setFlowStages(STAGES)
+
+let pass = 0
+const check = (name, fn) => {
+  try {
+    fn()
+    pass++
+    console.log(`ok   ${name}`)
+  } catch (e) {
+    console.log(`FAIL ${name}: ${e.message}`)
+    process.exitCode = 1
+  }
+}
+
+check('SalesTable>Currency>CustTrans warns same-field-cartesian', () => {
+  const r = findPaths('SalesTable', 'CustTrans', { maxHops: 2, scope: SCOPE, rankBy: 'evidence' })
+  const hit = r.results.find((x) => x.key === 'SalesTable>Currency>CustTrans')
+  assert.ok(hit, 'the currency-bridge path must be in the result set')
+  const br = hit.bridges?.find((b) => b.table === 'Currency')
+  assert.ok(br, 'Currency hop must be flagged')
+  assert.equal(br.reason, 'same-field-cartesian')
+  assert.match(String(br.field).toLowerCase(), /currency/)
+})
+
+check('SalesLine>InventTransOrigin>InventTrans stays silent', () => {
+  const r = findPaths('SalesLine', 'InventTrans', { maxHops: 3, scope: SCOPE, rankBy: 'evidence' })
+  const hit = r.results.find((x) => x.key === 'SalesLine>InventTransOrigin>InventTrans')
+  assert.ok(hit, 'the arbitrated path must be in the result set')
+  const br = hit.bridges?.find((b) => b.table === 'InventTransOrigin')
+  assert.ok(!br, `InventTransOrigin must NOT be flagged, got ${JSON.stringify(br)}`)
+})
+
+check('CashDisc bridge (same code field) warns', () => {
+  const r = findPaths('SalesTable', 'CustTrans', { maxHops: 2, scope: SCOPE, rankBy: 'evidence' })
+  const hit = r.results.find((x) => x.key === 'SalesTable>CashDisc>CustTrans')
+  if (!hit) return // not reachable in this scope; nothing to assert
+  const br = hit.bridges?.find((b) => b.table === 'CashDisc')
+  assert.ok(br, 'CashDisc hop must be flagged')
+})
+
+check('canonical pinned rows are exempt from noise: pin row renders without mandatory bridge flag', () => {
+  // The canonical chain for this pair is CustInvoiceJour — must not warn.
+  const r = findPaths('SalesTable', 'CustTrans', { maxHops: 2, scope: SCOPE, rankBy: 'evidence' })
+  const hit = r.results.find((x) => x.key === 'SalesTable>CustInvoiceJour>CustTrans')
+  assert.ok(hit)
+  assert.ok(!hit.bridges?.length, `canonical chain must not warn, got ${JSON.stringify(hit.bridges)}`)
+})
+
+check('every result carries a bridges array (shape contract)', () => {
+  const r = findPaths('SalesTable', 'CustTrans', { maxHops: 4, maxResults: 25, scope: SCOPE, rankBy: 'evidence' })
+  for (const x of r.results) assert.ok(Array.isArray(x.bridges), 'bridges must always be an array')
+})
+
+console.log(`\nbridge-risk gate: ${pass} passed`)
+process.exit(process.exitCode ?? 0)

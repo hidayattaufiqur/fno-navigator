@@ -236,6 +236,99 @@ function edgeHasDocId(e) {
   return DOC_ID_STEMS.some((s) => a.endsWith(s) || b.endsWith(s) || a === s || b === s)
 }
 
+/**
+ * ── CARTESIAN-BRIDGE DETECTION ─────────────────────────────────────────────
+ * Measured hazard, not a guess. `SalesTable.CurrencyCode` and
+ * `CustTrans.CurrencyCode` BOTH reference `Currency.CurrencyCode` (a field
+ * referenced by 1,135 tables). So the path
+ *
+ *     SalesTable > Currency > CustTrans
+ *
+ * joins every sales order to every customer transaction that shares a currency —
+ * a cartesian product, not a relationship. A developer pasting that into X++
+ * gets silent row multiplication.
+ *
+ * WHY DEGREE ALONE IS NOT THE SIGNAL (measured 2026-11-19): classifying hubs by
+ * TableGroup + relation degree flagged `InventTransOrigin`, `PurchTable` and
+ * `SalesTable` — including 6 of the 37 canonical chains. `InventTransOrigin` has
+ * in-degree 303 and is the REQUIRED bridge from SalesLine/PurchLine/ProdTable to
+ * InventTrans. A degree rule would have warned on correct answers, and 72% of all
+ * fallback paths touched some high-degree table, so it would have been noise.
+ *
+ * THE ACTUAL SIGNATURE is narrower and correct: a mid-path table is dangerous
+ * when we enter it on one field and leave on the SAME field, because both
+ * neighbours then constrain the same key and their rows pair up freely.
+ *   - `SalesTable > Currency > CustTrans`  enter+leave on CurrencyCode   → hazard
+ *   - `SalesLine > InventTransOrigin > InventTrans`  enter on RecId,
+ *     leave on InventTransId                                             → safe
+ * That is a per-path check on the hop fields, so it needs no curated allowlist
+ * and cannot drift.
+ */
+
+/**
+ * Classify a mid-path table as a potentially row-multiplying bridge.
+ * @param {string} table
+ * @param {GEdge} inEdge edge used to arrive at `table`
+ * @param {GEdge} outEdge edge used to leave `table`
+ * @returns {{table: string, field: string, reason: 'same-field-cartesian'|'setup-bridge'} | null}
+ */
+function bridgeRisk(table, inEdge, outEdge) {
+  if (!inEdge || !outEdge) return null
+  const node = state.nodes.get(table)
+  if (!node) return null
+
+  // The field we arrive on and the field we leave on, both expressed as the
+  // column ON THIS TABLE.
+  //
+  // Traversal direction is carried by `.to`: in a reversed hop `.to` is the
+  // PARENT, so arriving there means the join column is `parentField`. Getting
+  // this backwards reads the neighbour's column instead of ours and the hazard
+  // silently never fires (measured: the Currency check read `CurrencyCode` on
+  // one side and `Currency.CurrencyCode` on the other, so they compared unequal).
+  const arrivedOn = inEdge.to === table ? inEdge.parentField : inEdge.childField
+  const leftOn = outEdge.to === table ? outEdge.childField : outEdge.parentField
+
+  const a = String(arrivedOn ?? '').toLowerCase()
+  const b = String(leftOn ?? '').toLowerCase()
+
+  // Same field on both hops: both neighbours constrain one key, so their rows
+  // combine freely. This is the cartesian signature.
+  if (a && b && a === b) {
+    const field = arrivedOn
+    // Only flag when the table is actually broad enough for it to matter. A
+    // same-field hop through a two-row table is harmless.
+    if (node.degree >= HUB_DEGREE || /currency|cashdisc|unitofmeasure|numberSequence|dimension/i.test(table)) {
+      return { table, field, reason: 'same-field-cartesian' }
+    }
+  }
+
+  // Setup table entered and left on different fields is still a weak bridge
+  // worth a quieter note when it is genuinely a setup group with huge breadth.
+  const group = String(node.group ?? '')
+  if ((group === 'Group' || group === 'Reference' || group === 'Parameter') && node.degree > HUB_DEGREE) {
+    return { table, field: arrivedOn ?? '', reason: 'setup-bridge' }
+  }
+
+  return null
+}
+
+/**
+ * Bridge risks across a whole path.
+ * @param {{table: string, edge: GEdge|null}[]} steps
+ */
+function bridgeRisks(steps) {
+  const out = []
+  // Intermediates are steps[1..length-2]. For a 2-hop path there is exactly one
+  // (index 1), so the bound must be `<= length - 2`, not `< length - 1`.
+  // Off-by-one here meant every 2-hop path — including the Currency hazard this
+  // check exists for — was never examined at all.
+  for (let i = 1; i <= steps.length - 2; i++) {
+    const risk = bridgeRisk(steps[i].table, steps[i].edge, steps[i + 1].edge)
+    if (risk && !out.some((r) => r.table === risk.table)) out.push(risk)
+  }
+  return out
+}
+
 /** @param {GEdge} e */
 function viaOf(e) {
   return `${e.child}.${e.childField} → ${e.parent}.${e.parentField}`
@@ -295,7 +388,7 @@ function makeRanker(rankBy) {
  *   steps: {table: string, via: string, tier: string|null, edge: GEdge|null}[],
  *   path: string[], key: string, hops: number, cost: number,
  *   story: number, tierFloor: string, joinable: boolean, xpp: string,
- *   canonical: boolean
+ *   canonical: boolean, bridges: {table: string, field: string, reason: string}[]
  * }} PathResult
  */
 
@@ -390,6 +483,7 @@ export function findPaths(
         'A'
       )
       found.push({
+        bridges: bridgeRisks(stepsCopy),
         steps: stepsCopy,
         path: path.slice(),
         key: path.join('>'),
@@ -429,7 +523,25 @@ export function findPaths(
   const ranker = makeRanker(rankBy)
   for (const r of found) {
     const prev = byKey.get(r.key)
-    if (!prev || ranker(r, prev) < 0) byKey.set(r.key, r)
+    if (!prev) {
+      byKey.set(r.key, r)
+      continue
+    }
+    const cmp = ranker(r, prev)
+    // A variant that exposes a bridge is strictly more informative than one that
+    // does not, and bridge detection depends on WHICH columns this variant joins
+    // on — so it outranks the comparator for same-sequence candidates.
+    const rB = r.bridges?.length ?? 0
+    const pB = prev.bridges?.length ?? 0
+    if (rB !== pB) {
+      // More detected bridges wins outright, in BOTH directions. Bridge detection
+      // depends on WHICH columns a variant joins on, and parallel edges produce
+      // several variants of one table sequence — so an unbridged sibling must
+      // never take the slot from a bridged one.
+      if (rB > pB) byKey.set(r.key, r)
+      continue
+    }
+    if (cmp < 0) byKey.set(r.key, r)
   }
 
   /** @type {PathResult[]} */

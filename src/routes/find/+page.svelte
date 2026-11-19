@@ -52,6 +52,7 @@
   // source|target -> arbitrated canonical chain. Loaded from the fixture file so
   // the pins are data, not code.
   let canonicalMap = new Map()
+  let canonicalWhy = new Map()
   let canonicalReady = false
 
   const TIER_MEANING = {
@@ -100,8 +101,13 @@
       if (!res.ok) return
       const data = await res.json()
       const m = new Map()
-      for (const p of data.pairs ?? []) m.set(p.source + '|' + p.target, p.canonical)
+      const w = new Map()
+      for (const p of data.pairs ?? []) {
+        m.set(p.source + '|' + p.target, p.canonical)
+        w.set(p.source + '|' + p.target, p.why ?? '')
+      }
       canonicalMap = m
+      canonicalWhy = w
       canonicalReady = true
     } catch {
       // Absent fixture file is not an error: the site still works, just without
@@ -1184,8 +1190,16 @@
                      mode, stated in the header). -->
                 {#if graphAvailable}
                   {#if result.canonical}
-                    <span class="canonical-pin-badge" title="Arbitrated canonical path for this pair — verified by a D365FO domain owner, not produced by the ranking algorithm">
+                    <span
+                      class="canonical-pin-badge"
+                      title={canonicalWhy.get(sourceTable + '|' + targetTable) ||
+                        'Arbitrated canonical path for this pair — verified by a D365FO domain owner, not produced by the ranking algorithm'}
+                    >
                       canonical
+                    </span>
+                  {:else if graphAvailable}
+                    <span class="inferred-badge" title="Algorithm-ranked fallback: no arbitrated canonical path exists for this pair. Check the where conditions before relying on the join.">
+                      inferred
                     </span>
                   {/if}
                   {#if result.joinable}
@@ -1224,6 +1238,18 @@
                 {/if}
               </div>
               <!-- Row 2: FK field labels, one per hop -->
+              {#if result.bridges?.length}
+                <div class="bridge-warn" role="note">
+                  {#each result.bridges as br}
+                    <span
+                      class="bridge-flag"
+                      title="Risk: {br.reason === 'same-field-cartesian'
+                        ? `Both neighbours join ${br.table} on the same field (${br.field}), so rows pair up freely — this is a cartesian product, not a relationship. Verify the join before relying on it.`
+                        : `${br.table} is a broad setup table used as a bridge; the result may multiply rows.`}"
+                    >⚠ {br.table}</span>
+                  {/each}
+                </div>
+              {/if}
               {#if result.steps.some((s) => s.via)}
                 <div class="path-fk-list">
                   {#each result.steps.slice(1) as step}
@@ -2280,6 +2306,28 @@
     font-size: 0.72rem;
     color: var(--dim, #7b8698);
   }
+  .inferred-badge {
+    margin-left: 0.5rem;
+    padding: 0.05rem 0.45rem;
+    border-radius: 999px;
+    font-size: 0.68rem;
+    color: var(--dim, #7b8698);
+    border: 1px dotted currentColor;
+  }
+
+  .bridge-warn {
+    display: flex;
+    gap: 0.35rem;
+    margin-top: 0.2rem;
+  }
+  .bridge-flag {
+    padding: 0.05rem 0.45rem;
+    border-radius: 999px;
+    font-size: 0.68rem;
+    color: var(--warn, #c08a2e);
+    border: 1px solid currentColor;
+  }
+
   .canonical-pin-badge {
     margin-left: 0.5rem;
     padding: 0.05rem 0.45rem;
