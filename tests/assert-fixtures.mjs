@@ -14,7 +14,7 @@ import { join } from 'node:path'
 import { findPaths } from './harness.mjs'
 
 const ROOT = join(import.meta.dirname, '..')
-const FIXTURES = JSON.parse(readFileSync(join(ROOT, 'static/data/path-fixtures.json'), 'utf8'))
+const FIXTURES = JSON.parse(readFileSync(join(ROOT, 'static/data/regression-must-surface.json'), 'utf8'))
 
 // Undirected existence check (for bar='existence' fixtures): every mustSurface
 // path must be a valid chain in the dataset — the surfacing contract is that

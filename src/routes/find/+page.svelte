@@ -123,7 +123,7 @@
   async function loadCanonical() {
     if (canonicalReady) return
     try {
-      const res = await fetch('/data/canonical-fixtures.json')
+      const res = await fetch('/data/pinned-canonical-paths.json')
       if (!res.ok) return
       const data = await res.json()
       const m = new Map()
@@ -649,7 +649,7 @@
     if (canonicalLoadAttempted) return
     canonicalLoadAttempted = true
     try {
-      const res = await fetch('/data/path-fixtures.json')
+      const res = await fetch('/data/regression-must-surface.json')
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       canonicalFixtures = (await res.json()).pairs ?? []
     } catch {

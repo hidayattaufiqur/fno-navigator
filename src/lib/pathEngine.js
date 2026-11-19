@@ -29,7 +29,7 @@
  * `tests/prefix-exactness.mjs` asserts it and must stay green.
  *
  * ── WHY RANKING IS CURATED, NOT DERIVED ───────────────────────────────────
- * Canonical paths are pinned from `canonical-fixtures.json` — 37 chains
+ * Canonical paths are pinned from `pinned-canonical-paths.json` — 37 chains
  * arbitrated by a D365FO domain owner, each validated hop-by-hop against
  * declared AOT relations. Schema signals provably cannot recover business
  * intent: sweeping a hub penalty from 0 to 30 left all 7 authored-vs-graph
@@ -176,7 +176,7 @@ export function setFlowStages(map) {
  */
 
 /** @type {{ready: boolean, nodes: Map<string, any>, out: Map<string, GEdge[]>, meta: any}} */
-const state = { ready: false, nodes: new Map(), out: new Map(), meta: null }
+const state = { ready: false, nodes: new Map(), out: new Map(), meta: null, customSkipped: 0 }
 
 export const graphLoadState = { status: 'idle', error: '' }
 
@@ -215,18 +215,40 @@ function indexGraph(raw) {
   // Node kind is stored as a small integer in the artifact (0=table, 1=entity,
   // 2=view). Names are restored here so callers never need the encoding.
   const KIND_NAMES = ['table', 'entity', 'view']
+  /**
+   * ISV / custom tables are excluded at index time.
+   *
+   * A local AOT build pulls whatever models the environment carries, so our
+   * artifact contains 429 custom nodes (GLOB_* 256, DOT_* 46, HCPI_* 28, STI_*
+   * 23, QAC_* 20, HMID_* 15 ...) and 392 edges touching them. They are not part
+   * of standard D365FO, so they have no place in a standard-metadata navigator:
+   * they add noise, they fabricate bridges between standard tables
+   * (`GLOB_P001_PurchLineHistory` alone has 59), and they keep the product on
+   * the licensed side of the provenance line.
+   *
+   * Skipping the NODE is enough — every edge endpoint is looked up in
+   * state.nodes, so custom-involving edges fall out without a second pass.
+   * Measured 2026-11-19: 0 of 74 canonical pins reference a custom table, so
+   * this changes no pinned answer.
+   */
+  let customSkipped = 0
   for (const row of raw.nodes) {
+    if (row[5] === 1) {
+      customSkipped++
+      continue
+    }
     state.nodes.set(row[0], {
       name: row[0],
       kind: KIND_NAMES[Number(row[1])] ?? 'table',
       group: row[2],
       type: row[3],
       obsolete: row[4] === 1,
-      custom: row[5] === 1,
+      custom: false,
       degree: row[6],
       formUse: row[7],
     })
   }
+  state.customSkipped = customSkipped
 
   let ei = 0
   for (const row of raw.edges) {
@@ -267,7 +289,10 @@ export function isGraphReady() {
 }
 
 export function getGraphMeta() {
-  return state.meta
+  if (!state.meta) return null
+  // `customSkipped` is reported so the page can be honest that the artifact
+  // carried ISV tables the navigator deliberately does not serve.
+  return { ...state.meta, customSkipped: state.customSkipped }
 }
 
 /** @param {string} name */

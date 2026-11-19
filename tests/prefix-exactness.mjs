@@ -55,7 +55,7 @@ await loadGraph()
 setFlowCohorts(cohorts)
 setFlowStages(stages)
 
-const canonical = JSON.parse(readFileSync(join(HERE, 'canonical-fixtures.json'), 'utf8')).pairs
+const canonical = JSON.parse(readFileSync(join(HERE, 'pinned-canonical-paths.json'), 'utf8')).pairs
 const chainsFor = (a, b) => canonical.filter((p) => p.source === a && p.target === b).map((p) => p.canonical)
 
 const PAIRS = [

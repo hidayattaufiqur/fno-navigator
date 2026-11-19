@@ -11,7 +11,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 const ROOT = join(import.meta.dirname, '..')
-const FIXTURES = JSON.parse(readFileSync(join(ROOT, 'static/data/path-fixtures.json'), 'utf8'))
+const FIXTURES = JSON.parse(readFileSync(join(ROOT, 'static/data/regression-must-surface.json'), 'utf8'))
 const fwd = JSON.parse(readFileSync(join(ROOT, 'static/data/fk-map.json'), 'utf8'))
 
 // Reverse map (child -> [[parent, parentField, childField], ...]) like the app.

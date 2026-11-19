@@ -13,7 +13,7 @@ import { performance } from 'node:perf_hooks'
 import { findPaths } from './harness.mjs'
 
 const ROOT = join(import.meta.dirname, '..')
-const FIXTURES = JSON.parse(readFileSync(join(ROOT, 'static/data/path-fixtures.json'), 'utf8'))
+const FIXTURES = JSON.parse(readFileSync(join(ROOT, 'static/data/regression-must-surface.json'), 'utf8'))
 
 const BUDGET_MS = 300
 const RUNS = 7

@@ -47,7 +47,7 @@ await m.loadGraph()
 m.setFlowCohorts(COH)
 m.setFlowStages(STG)
 
-const pairs = JSON.parse(readFileSync(join(ROOT, 'static/data/canonical-fixtures.json'), 'utf8')).pairs
+const pairs = JSON.parse(readFileSync(join(ROOT, 'static/data/pinned-canonical-paths.json'), 'utf8')).pairs
 const chainFor = (a, b) => {
   const p = pairs.find((x) => x.source === a && x.target === b)
   return p ? [p.canonical] : null
@@ -157,6 +157,18 @@ for (const p of pairs) {
   else viaInferred++
 }
 console.log(`\nlayer distribution of top-1: relation-class ${viaClass} · canonical-pin ${viaPin} · inferred ${viaInferred}`)
+
+// ── G5: no ISV / custom tables are reachable ──────────────────────────────
+// The artifact carries custom nodes (GLOB_*, DOT_*, STI_*, HMID_* ...) because a
+// local AOT build includes whatever models the environment has. Indexing skips
+// them so a standard-metadata navigator never serves or routes through them.
+const customInGraph = m.getNodeNames().filter((n) => m.getNode(n)?.custom === true)
+gate('G5  no custom node is indexed', customInGraph.length === 0, customInGraph.slice(0, 5).join(', '))
+
+const isvPrefixes = ['GLOB_', 'STI_', 'HMID_', 'HCPI_', 'QAC_', 'PRAP_']
+const isvReachable = m.getNodeNames().filter((n) => isvPrefixes.some((p) => n.startsWith(p)))
+gate('G5  no ISV-prefixed table is reachable', isvReachable.length === 0, isvReachable.slice(0, 5).join(', '))
+console.log(`G5  ${isvReachable.length} ISV tables reachable (customSkipped=${m.getGraphMeta()?.customSkipped ?? '?'})`)
 
 console.log(fail === 0 ? '\nALL GATES PASSED' : `\n${fail} gate(s) failed`)
 process.exit(fail === 0 ? 0 : 1)
