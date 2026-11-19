@@ -551,6 +551,14 @@ export function findPaths(
   // enumeration it is reported first regardless of algorithm rank, because the
   // domain owner's answer outranks any scoring function. Measured need: two
   // arbitrated chains rank 108th and 147th on schema signals alone.
+  //
+  // It must SURVIVE the minTier filter too. Measured 2026-11-19: 10 of 37
+  // arbitrated chains contain a C or D hop (SalesTable>SalesLine is tier C,
+  // CustInvoiceJour>CustTrans is tier D), so `minTier: 'A'` used to delete the
+  // canonical answer for those pairs and leave only inferred rows. minTier
+  // filters EVIDENCE; the canonical chain is already arbitrated, so filtering it
+  // by evidence contradicts why it is pinned. Rebuilt from the graph here rather
+  // than looked up in `ranked`, so it appears even when the filter excluded it.
   let canonical = null
   const chains = canonicalChains ?? []
   for (const chain of chains) {
@@ -564,6 +572,12 @@ export function findPaths(
       if (at > 0) {
         ranked.splice(at, 1)
         ranked.unshift(hit)
+      }
+    } else {
+      const rebuilt = rebuildChain(chain)
+      if (rebuilt) {
+        rebuilt.canonical = true
+        ranked.unshift(rebuilt)
       }
     }
     break
@@ -583,6 +597,45 @@ export function findPaths(
     graph: true,
     enumerated,
     canonical,
+  }
+}
+
+/**
+ * Reconstruct a known chain directly from the graph, bypassing the search filters.
+ *
+ * Used only for arbitrated canonical chains. Every hop must still be a declared
+ * relation in the right direction — if any hop is missing the chain is rejected
+ * rather than partially rendered, because a canonical path with an invented hop
+ * is exactly the failure this project has hit twice.
+ * @param {string[]} chain
+ * @returns {PathResult|null}
+ */
+function rebuildChain(chain) {
+  const steps = [{ table: chain[0], via: '', tier: /** @type {string|null} */ (null), edge: /** @type {GEdge|null} */ (null) }]
+  const tiers = []
+  let cost = 0
+  for (let i = 0; i < chain.length - 1; i++) {
+    const from = chain[i]
+    const to = chain[i + 1]
+    const edge = (state.out.get(from) ?? []).find((e) => e.to === to)
+    if (!edge) return null
+    steps.push({ table: to, via: viaOf(edge), tier: edge.tier, edge })
+    tiers.push(edge.tier)
+    cost += Math.max((TIER_COST[edge.tier] ?? 14) + (to === chain.at(-1) ? 0 : nodeCost(state.nodes.get(to))) + (edgeHasDocId(edge) ? DOC_ID_BONUS : 0), 1)
+  }
+  const tierFloor = tiers.reduce((worst, t) => ((TIER_RANK[String(t)] ?? 3) > (TIER_RANK[worst] ?? 3) ? String(t) : worst), 'A')
+  return {
+    steps,
+    path: chain.slice(),
+    key: chain.join('>'),
+    hops: chain.length - 1,
+    cost,
+    story: stagePenalty(chain),
+    tierFloor,
+    joinable: tiers.every((t) => t === 'A'),
+    xpp: '',
+    canonical: true,
+    bridges: bridgeRisks(steps),
   }
 }
 

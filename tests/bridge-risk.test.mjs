@@ -93,6 +93,43 @@ check('canonical pinned rows are exempt from noise: pin row renders without mand
   assert.ok(!hit.bridges?.length, `canonical chain must not warn, got ${JSON.stringify(hit.bridges)}`)
 })
 
+
+check('canonical chain survives minTier=A even when it contains a C/D hop', () => {
+  // Measured 2026-11-19: 10 of 37 arbitrated chains contain a C or D hop, so a
+  // strict minTier deleted the canonical answer for those pairs and left only
+  // inferred rows. minTier filters EVIDENCE; an arbitrated chain is pinned for a
+  // different reason and must not be filtered out of existence.
+  const chain = ['SalesTable', 'CustInvoiceJour', 'CustTrans'] // tiers D,A
+  const r = findPaths('SalesTable', 'CustTrans', {
+    scope: SCOPE,
+    maxHops: 4,
+    maxResults: 50,
+    minTier: 'A',
+    rankBy: 'canonical',
+    canonicalChains: [chain],
+  })
+  const hit = r.results.find((x) => x.key === chain.join('>'))
+  assert.ok(hit, 'canonical chain must still be present under minTier=A')
+  assert.equal(hit.canonical, true)
+  assert.equal(r.results[0].key, chain.join('>'), 'and still pinned first')
+})
+
+check('a chain with an undeclared hop is rejected, not partially rendered', () => {
+  const bogus = ['SalesTable', 'CustTrans', 'InventTable'] // CustTrans->InventTable not declared
+  const r = findPaths('SalesTable', 'InventTable', {
+    scope: SCOPE,
+    maxHops: 4,
+    maxResults: 10,
+    minTier: 'D',
+    rankBy: 'evidence',
+    canonicalChains: [bogus],
+  })
+  assert.ok(
+    !r.results.some((x) => x.key === bogus.join('>')),
+    'an invalid canonical chain must never be rendered'
+  )
+})
+
 check('every result carries a bridges array (shape contract)', () => {
   const r = findPaths('SalesTable', 'CustTrans', { maxHops: 4, maxResults: 25, scope: SCOPE, rankBy: 'evidence' })
   for (const x of r.results) assert.ok(Array.isArray(x.bridges), 'bridges must always be an array')

@@ -40,7 +40,11 @@
   // the generated verification graph is present; anything else means this build
   // has only the public seed map and must use the legacy scorer.
   let graphStatus = 'idle'
-  let tierFilter = 'D'
+  // Defaults are the most selective combination that still answers: tier A
+  // (joinable only — safe to paste into X++) with Story ranking (documented
+  // stage progression). D · all + Evidence is the noisiest setting and was the
+  // wrong default: it showed lookup detours first.
+  let tierFilter = 'A'
   let rankBy = 'canonical'
   let copiedKey = ''
   $: graphAvailable = graphStatus === 'ready'
@@ -462,6 +466,40 @@
 
   // ── Pathfinding ────────────────────────────────────────────────────────────
 
+  // Filters re-run the search themselves. Before this, clicking a tier or rank
+  // control changed nothing visible until "Find paths" was pressed again — the
+  // controls looked broken because they were inert. Guarded on searchState so a
+  // programmatic set (e.g. restoring from the URL store) does not recurse.
+  let autoRerunArmed = false
+  let autoRerunTimer = null
+
+  /**
+   * Set a filter and re-run immediately.
+   *
+   * Filters used to be inert until "Find paths" was pressed a second time, which
+   * read as broken controls. Re-running on change is safe here because the
+   * exhaustive search is measured at ~500ms worst case on the densest pair, and
+   * the timer collapses rapid clicks into one search.
+   * @param {'tier' | 'rank'} which @param {string} value
+   */
+  function setFilter(which, value) {
+    if (which === 'tier') tierFilter = value
+    else rankBy = value
+    scheduleRerun()
+  }
+
+  /** @param {number} value */
+  function setHops(value) {
+    maxHops = value
+    scheduleRerun()
+  }
+
+  function scheduleRerun() {
+    if (!autoRerunArmed || !sourceTable || !targetTable) return
+    clearTimeout(autoRerunTimer)
+    autoRerunTimer = setTimeout(() => handleFind(), 120)
+  }
+
   async function handleFind() {
     searchError = ''
     pathResults = []
@@ -529,6 +567,7 @@
     truncated = wasTruncated
     missing = missingTables
     searchState = 'done'
+    autoRerunArmed = true
     // Fixture file is optional enrichment for hints / known paths. Load it
     // lazily after the search so it never sits on the main data path.
     loadCanonicalFixtures()
@@ -873,7 +912,7 @@
               class="hops-btn"
               class:hops-active={maxHops === hops}
               aria-pressed={maxHops === hops}
-              on:click={() => (maxHops = hops)}
+              on:click={() => setHops(hops)}
             >{hops}</button>
           {/each}
         </div>
@@ -885,16 +924,16 @@
           <div class="sort-toggle" role="group" aria-label="Minimum join strength: every hop must be at least this strong">
             <button type="button" class="sort-btn"
               class:sort-active={tierFilter === 'A'} aria-pressed={tierFilter === 'A'}
-              title={TIER_MEANING.A} on:click={() => (tierFilter = 'A')}>A · joinable</button>
+              title={TIER_MEANING.A} on:click={() => setFilter('tier', 'A')}>A · joinable</button>
             <button type="button" class="sort-btn"
               class:sort-active={tierFilter === 'B'} aria-pressed={tierFilter === 'B'}
-              title={TIER_MEANING.B} on:click={() => (tierFilter = 'B')}>B · real FK</button>
+              title={TIER_MEANING.B} on:click={() => setFilter('tier', 'B')}>B · real FK</button>
             <button type="button" class="sort-btn"
               class:sort-active={tierFilter === 'C'} aria-pressed={tierFilter === 'C'}
-              title={TIER_MEANING.C} on:click={() => (tierFilter = 'C')}>C · conditional</button>
+              title={TIER_MEANING.C} on:click={() => setFilter('tier', 'C')}>C · conditional</button>
             <button type="button" class="sort-btn"
               class:sort-active={tierFilter === 'D'} aria-pressed={tierFilter === 'D'}
-              title={TIER_MEANING.D} on:click={() => (tierFilter = 'D')}>D · all</button>
+              title={TIER_MEANING.D} on:click={() => setFilter('tier', 'D')}>D · all</button>
           </div>
         </fieldset>
         <fieldset class="sort-fieldset">
@@ -903,11 +942,11 @@
             <button type="button" class="sort-btn"
               class:sort-active={rankBy === 'evidence'} aria-pressed={rankBy === 'evidence'}
               title="Rank on D365FO metadata alone: join type, table group, deprecation"
-              on:click={() => (rankBy = 'evidence')}>Evidence</button>
+              on:click={() => setFilter('rank', 'evidence')}>Evidence</button>
             <button type="button" class="sort-btn"
               class:sort-active={rankBy === 'canonical'} aria-pressed={rankBy === 'canonical'}
               title="Favour documented business flows: follow the ordered stages of the six core processes"
-              on:click={() => (rankBy = 'canonical')}>Story</button>
+              on:click={() => setFilter('rank', 'canonical')}>Story</button>
           </div>
         </fieldset>
       {:else}
@@ -1209,6 +1248,17 @@
                       title="Copy this chain as an X++ select-join — every hop is an indexed foreign key"
                       on:click={() => copyXpp(result)}
                     >{copiedKey === result.key ? 'Copied' : 'Copy X++'}</button>
+                  {:else if result.canonical}
+                    <!-- The arbitrated chain is exempt from Minimum join: it is
+                         pinned because it is the answer, not because it scored
+                         well. Saying "weakest hop D" beside a filter set to A
+                         reads as a contradiction, so it is labelled instead. -->
+                    <span
+                      class="tier-floor-badge canonical-exempt"
+                      title="This path is the arbitrated canonical chain for the pair, so the Minimum join filter does not apply to it. Hop tiers are still shown above."
+                    >
+                      weakest hop {result.tierFloor} · not filtered
+                    </span>
                   {:else}
                     <span class="tier-floor-badge" title={TIER_MEANING[result.tierFloor]}>
                       weakest hop {result.tierFloor}
@@ -2306,6 +2356,11 @@
     font-size: 0.72rem;
     color: var(--dim, #7b8698);
   }
+  .canonical-exempt {
+    opacity: 0.75;
+    font-style: italic;
+  }
+
   .inferred-badge {
     margin-left: 0.5rem;
     padding: 0.05rem 0.45rem;
