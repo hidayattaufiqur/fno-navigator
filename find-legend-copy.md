@@ -1,23 +1,33 @@
 # Table Path Finder legend copy
 
-Copy for `/find`, rewritten for the tiered engine (`src/lib/pathEngine.js`) that replaced the retired `pathScoring.js` path on 2026-11-19. Source of truth for the verbatim mirror in `src/lib/findLegendCopy.js`.
+Copy for `/find`, rewritten for the page as it ships after `d375d03` (2026-11-19, the commit that removed the tier filter and the per-hop chips). `107bdb2` lands on top of it and touches no copy. Source of truth for the verbatim mirror in `src/lib/findLegendCopy.js`.
 
 ## How this deck maps to code
 
-This deck replaces the old one. The old copy documented a retired engine, so most of it goes away rather than gets edited.
+This is the third deck. The first documented the retired `pathScoring.js` engine, the second documented the tiered engine with a visible tier filter and per-hop chips. Both of those UI facts are gone, so this rewrite is mostly deletion.
 
-- `## Tooltip one-liners` feeds `TOOLTIP_COPY`. One row per tooltip, and the general table holds every live tooltip: provenance badges, bridge flags, rank profiles, notes.
-- Tier chip tooltips are the exception. They live in `TIER_MEANING` in `+page.svelte`, shared by the chip, the Minimum join filter and the `weakest hop` badge, and the four strings in the legend section below are copied from it word for word. Do not duplicate them into `TOOLTIP_COPY`; keep one array and have the legend section quote it.
-- The old `### Reason chip tooltips` table and `REASON_TOOLTIP_COPY` are deleted outright. No reason chips exist in the tiered engine, so the gate's reason-table branch goes with them: remove the `REASON_TOOLTIP_COPY` import plus the `if (!reasonTable)` block (lines 85-93) from `tests/check-legend-copy.mjs`.
-- Suggested keys, one per row in table order: `canonical`, `inferred`, `bridge-cartesian`, `bridge-setup`, `weakest-hop`, `copy-xpp`, `rank-story`, `rank-evidence`, `shortest-hops`, `truncated-note`, `missing-note`, `canonical-hint`, `known-canonical`. `missing-note`, `canonical-hint` and `known-canonical` are existing keys reused unchanged and `shortest-hops` keeps its key with new copy. The other nine are new; net count goes 11 → 13.
-- Deletions. `curated` becomes `canonical` (two call sites, lines ~1102 and ~1254). `business-flow`, `cleanest-path`, `shortest`, `ranked-by-class-score` and `reason-chips` describe the retired engine and go with it; `shortest` and `ranked-by-class-score` are already unreferenced in `src/`, so those two cost nothing. `business-flow`, `cleanest-path` and `reason-chips` are still referenced in the `{:else}` seed-engine branch, so delete those data-tip attributes with the keys. The gate compares every `TOOLTIP_COPY` value against the table as a multiset, so a kept key without a row fails the check.
-- The two provenance badges and the bridge flags currently carry inline `title=` strings rather than `TOOLTIP_COPY` lookups. Point them at the new keys so this deck stays the source of truth. Tier chips stay on `TIER_MEANING` (see above) because three UI surfaces read that one array.
-- The bridge tooltip is one fixed string per reason, chosen on `br.reason`: `same-field-cartesian` gets `bridge-cartesian`, `setup-bridge` gets `bridge-setup`. The table name is already on the chip, so neither string needs interpolation and both stay inside the word limit. The current inline templates interpolate `br.table` and `br.field` mid-sentence, which is why they cannot move into `TOOLTIP_COPY` as they stand.
-- The `canonical` pill tooltip is data-driven: render the pair's `why` note from `canonical-fixtures.json` when it exists, and fall back to this string when it does not. The 37 `why` notes run 3 to 35 words, so they stay in the fixture file and never enter `TOOLTIP_COPY`: the gate's word limit applies to the fallback string only.
-- Two fixture files, two jobs, and the copy must not blur them. `canonical-fixtures.json` (37 arbitrated pairs, with `why`) drives the `canonical` pill and the pinning. `path-fixtures.json` (23 regression pairs, `mustSurface`) drives the `Known canonical path` block. The deck calls the second one "the validated fixture set" for that reason.
-- `## Legend section copy` feeds `LEGEND_GROUPS`: 3 groups, 10 sections. Headings are `Path ranking`, `Join quality`, `Notes`. Eight sections have one prose paragraph; `Tier chips A–D` has five (an intro plus the four tier lines) and `Canonical and inferred` has two.
-- `## Page strings` is markup the gate does not check. It corrects the strings that still describe the seed map or the sampled search. Apply by hand in `src/routes/find/+page.svelte` and `src/routes/tables/[name]/+page.svelte`.
+- The **tier filter buttons were removed 2026-11-19.** The four-button "Minimum join" group (A · joinable / B · real FK / C · conditional / D · all) is no longer in the toolbar; the toolbar is Max hops (2/3/4/5) + Rank by (Story / Evidence). Two reasons, both measured: with the derived header→line relation class and 74 canonical pins the filter no longer changed the answer, and six per-hop chips per row were the main source of visual noise. The tier still gates the search and still decides whether `Copy X++` is offered — it is just no longer a control, and it is communicated as one tag on the rows that need it.
+- `## Tooltip one-liners` feeds `TOOLTIP_COPY`. One row per tooltip, and the table holds every live tooltip: provenance badges, the relation-class pill, the three join tags, bridge flags, rank profiles, notes.
+- Suggested keys, one per row in table order: `canonical`, `inferred`, `header-line`, `tag-scan`, `tag-conditional`, `tag-convention`, `bridge-cartesian`, `bridge-setup`, `copy-xpp`, `rank-story`, `rank-evidence`, `shortest-hops`, `truncated-note`, `missing-note`, `canonical-hint`, `known-canonical`. Net count goes 13 → 16: `weakest-hop` is deleted (no badge carries it any more) and four are new (`header-line`, `tag-scan`, `tag-conditional`, `tag-convention`).
+- `TIER_MEANING` in `+page.svelte` has exactly two references left: its own definition and the join tag's `title`. Its four strings are 16/16/11/11 words — over the limit — so they must never be copied into `TOOLTIP_COPY`; the gate would fail on them. Point the tag's `title` at the `tag-*` keys instead, after which `TIER_MEANING` has no consumer and can be deleted outright.
+- The `header→line` pill currently carries an inline `title=` of 24 words: "Header→line relation: one table is the document header and the other its line, joined on the header's own key. Derived from TableGroup, no curation." The `header→line` row below is the 12-word replacement; wire the pill to it and the inline string goes.
+- The bridge flags already read `TOOLTIP_COPY['bridge-cartesian']` / `['bridge-setup']` and the two badges already read `TOOLTIP_COPY.canonical` / `.inferred`, so those four need no wiring work. The `canonical` pill still prefers the pair's `why` note from `canonical-fixtures.json` and falls back to this string, which is correct: the 74 `why` notes run 3 to 46 words and stay in the fixture file. The gate's word limit applies to the fallback string only.
+- Two fixture files, two jobs, and the copy must not blur them. `canonical-fixtures.json` (74 arbitrated entries, 37 pairs in both directions, each with `why`) drives the `canonical` pill and the pinning. `path-fixtures.json` (23 regression pairs, `mustSurface`) drives the `Known canonical path` block. The deck calls the second one "the validated fixture set" for that reason.
+- `## Legend section copy` feeds `LEGEND_GROUPS`: 3 groups, 10 sections. Headings are `Path ranking`, `Join quality`, `Notes`. Eight sections have one prose paragraph; `Join tags` has four (an intro plus the three tag lines, mirroring the old tier list) and `Canonical and inferred` has two. Bullets are deliberately absent: the gate treats every non-blank, non-table, non-heading line as a paragraph.
+- `## Page strings` is markup the gate does not check. It corrects the strings that still describe the retired controls, plus six `TOOLTIP_COPY` lookups that resolve to nothing today.
 - Every tooltip is 12 words or fewer. Legend prose has no word limit.
+- Every number in this deck was re-measured on `static/data/graph-compact.json` (27,582 nodes, 58,310 hops) at the time of writing, not carried over from the brief. Two stale code comments to fix while applying this: the block comment above `isHeaderLineEdge` in `pathEngine.js` (~line 341) and the `tierFilter` comment in `+page.svelte` (~line 44) both cite 918 header→line relations and 44% at tier C/D, from an earlier export. The shipped artifact gives 719 and 54%.
+
+### What changed since the last deck, and where it lands
+
+1. Tier filter buttons removed → "How this deck maps to code", bullet 1; Page strings, results header.
+2. Per-hop tier chips gone → legend `Join tags`.
+3. Default minimum join is B, rank default Story → legend `Join tags` and `Story vs Evidence`.
+4. One tag replaces the chips (`scan` / `conditional` / `convention`) → legend `Join tags`; three new `tag-*` tooltips.
+5. New `header→line` provenance badge → legend `Relation classes`; new `header-line` tooltip.
+6. `weakest hop X · not filtered` string gone → `weakest-hop` key deleted; `Copy X++` section rewritten to point at the tags.
+7. Canonical pins bidirectional (37 pairs, 74 entries) → legend `Canonical and inferred`, second paragraph.
+8. `InventTable → InventDim` now pins via `InventItemLocation` → no copy change; it is one row in `canonical-fixtures.json`, whose `why` note the `canonical` pill already renders verbatim. Nothing in the legend names that chain.
 
 ## Tooltip one-liners
 
@@ -27,9 +37,12 @@ Every tooltip below is 12 words or fewer.
 | --- | --- |
 | `canonical` pill | Arbitrated chain for this pair — verified by a D365FO domain owner. |
 | `inferred` badge | Algorithm-ranked fallback: no arbitrated canonical chain for this pair. |
+| `header→line` pill | TableGroup says header and line, joined on the header's own key. |
+| `scan` tag | Declared FK, no index: a query may scan this table. |
+| `conditional` tag | Join also constrains a discriminator field, so no Copy X++. |
+| `convention` tag | No FK declared: convention only, so no Copy X++. |
 | `⚠ table` (cartesian bridge) | Both neighbours join the same field, so rows pair up freely. |
 | `⚠ table` (setup bridge) | Broad setup table used as a bridge; rows may multiply. |
-| `weakest hop X` | Weakest tier in this chain; not safe to paste as a join. |
 | `Copy X++` | Copies this chain as a select-join; every hop is an indexed FK. |
 | `Story` | Ranks by documented stage order from the six core flows. |
 | `Evidence` | Ranks on AOT metadata alone: join tier, table group, deprecation. |
@@ -41,21 +54,16 @@ Every tooltip below is 12 words or fewer.
 
 ## Page strings
 
-Markup, not gate-checked. Each block names the file and the state it applies to.
+Markup, not gate-checked. Three classes of change: strings that still mention a removed control, the truncation note, and six `TOOLTIP_COPY` lookups that currently resolve to `undefined` because the deck deleted those keys in the previous rewrite.
 
-`src/routes/find/+page.svelte`, header lede. The number depends on which graph loaded, which the page already knows as `graphAvailable`.
+Results header, `+page.svelte` line ~1060. `weakest join {tierFilter}` is now the only place the search gate is stated — there is no button to change it — so it has to read as a threshold, not as a control that was set. Drop the word "weakest", which described the removed badge.
 
 ```
-{#if graphAvailable}
-Find how two D365FO tables connect through declared relations. Uses the AOT relation graph:
-<strong>27,582 nodes</strong> and 58,310 graded hops, derived from Microsoft metadata.
-{:else}
-Find how two D365FO tables connect through foreign keys. This build runs on the public seed graph
-(<strong>43,616 relations</strong> across 5,587 tables), which can be stale or incomplete.
-{/if}
+{#if graphAvailable}joins at {tierFilter} or better · {rankBy === 'canonical' ? 'documented flows favoured' : 'metadata evidence only'}
+{:else if sortMode === 'shortest'}fewest hops first{:else}ranked by class &amp; score{/if}
 ```
 
-Loading state. Fires on `$fkLoadState === 'loading'`, which happens on the seed path and also on the AOT path (the fk-map still loads for autocomplete). The seed-flavoured copy is only right in the first case, so split it, and fix the size: the file is 2.3 MB, not 2.4.
+Loading state, line ~1018. The file is 2.3 MB (`fk-map.json` is 2,378,151 bytes), not 2.4. While here, note that the tiered engine ignores this string's claim about the seed graph: the fk-map still loads for autocomplete on both paths.
 
 ```
 {#if graphAvailable}
@@ -65,52 +73,25 @@ Fetching 43,616 verified table associations for the first time (~2.3 MB). This o
 {/if}
 ```
 
-Missing-table line, currently hard-coding 5,587 tables:
+Truncation note, line ~1107. The tiered branch is already correct prose but reads `sampled-note`, a deleted key. One element serves both branches, so split it rather than pointing the shared `data-tip` at `truncated-note`: the seed branch's "search space sampled" is a different claim.
 
 ```
 {#if graphAvailable}
-<strong>{missing.join(', ')}</strong> {missing.length === 1 ? 'is' : 'are'} not in the 27,582-node AOT graph.
+<p class="finder-note" data-tip={TOOLTIP_COPY['truncated-note']} tabindex="0" aria-describedby="find-tip">Top {pathResults.length} shown — more ranked paths exist for this pair.</p>
 {:else}
-<strong>{missing.join(', ')}</strong> {missing.length === 1 ? 'is' : 'are'} not in the 5,587-table seed graph.
+<p class="finder-note" tabindex="0">Search space sampled: showing {pathResults.length} of many more possible paths. Reduce max hops for a shorter list.</p>
 {/if}
 ```
 
-Truncation note. The tiered branch is wrong today: it says the search "stopped once no remaining path could beat those already found", but enumeration is exhaustive and `truncated` only means more ranked paths exist than were returned.
+Known-canonical block, line ~1152. Still outstanding from the previous deck: the badge reads `curated` and looks up `TOOLTIP_COPY.curated`, a key the module no longer exports, so the tooltip is empty. It is the same arbitrated knowledge as the row pill, so it should read `canonical` and use that key.
 
 ```
-{#if graphAvailable}
-Top {pathResults.length} shown — more ranked paths exist for this pair.
-{:else}
-Search space sampled: showing {pathResults.length} of many more possible paths. Reduce max hops for a shorter list.
-{/if}
+<span class="curated-badge" data-tip={TOOLTIP_COPY.canonical} …>canonical</span>
 ```
 
-Results header, second clause only. The tier-filter half is accurate; `class & score` belongs to the legacy seed engine and stays under the `{:else}`.
+Seed-engine branch, four lookups at lines 1299, 1306, 1313, 1360 point at deleted keys: `cleanest-path`, `business-flow`, `curated`, `reason-chips`. With the two above that is six dead lookups in the file. They are unreachable while the AOT artifact loads, but a public clone renders them as empty `title` attributes. Either give the seed branch its own map (`SEED_TOOLTIP_COPY`) or accept empty tooltips there; do not re-add the keys to `TOOLTIP_COPY`, because the gate compares that object against the tooltip table and this deck is about the AOT page.
 
-```
-{#if graphAvailable}weakest join {tierFilter} · {rankBy === 'canonical' ? 'documented flows favoured' : 'metadata evidence only'}
-{:else if sortMode === 'shortest'}fewest hops first{:else}ranked by class &amp; score{/if}
-```
-
-Provenance notice. Already ships and is accurate; keep it as is, it carries the six-flow statement the legend reuses.
-
-```
-{#if graphAvailable}
-Every hop is a declared D365FO relation, graded A–D by join strength. Ranking is verified for the six core
-flows — sales, procurement, production, inventory, project, finance. Tables outside them still resolve, but
-the order is best-effort.
-{:else}
-This build uses the public seed graph, derived from an older dataset — some relations may be stale or missing.
-{/if}
-```
-
-Known-canonical caption, line ~1085. Two changes: the pill on that block reads `canonical` (line ~1102), and the caption stops implying the chain is outside the ranking when a matching row is pinned into it.
-
-```
-Curated knowledge: a validated chain for this pair, pinned from the fixture set, not algorithm-ranked
-```
-
-`src/routes/tables/[name]/+page.svelte`, line ~707. Same conditional as the lede.
+`src/routes/tables/[name]/+page.svelte`, line ~707. Checked, accurate, no change:
 
 ```
 {#if graphAvailable}
@@ -126,49 +107,47 @@ These FK links come directly from the D365FO database schema (43,616 verified as
 
 #### Story vs Evidence
 
-`Story` ranks by documented stage progression: the ordered stages of the six core flows in `flows.ts`, so a chain that advances through one process outranks one that walks backwards or jumps between flows. `Evidence` drops that signal and ranks on AOT metadata alone. Both sort on the chain's weakest tier, then `cost`, then hop count; `Story` just puts stage progression ahead of all three. Both read the same enumeration, so switching profiles reorders the list without changing which paths are in it.
+`Story` is the default and ranks on documented stage progression: the ordered stages of the six core flows in `flows.ts`, so a chain that advances through one process outranks one that walks backwards or jumps between flows. `Evidence` drops that signal and ranks on AOT metadata alone. Both profiles begin with the same two hard rules — a header→line single hop first, then any declared one-hop relation — and only then diverge into stage progression versus tier. Both read the same exhaustive enumeration, so switching profiles reorders the list without changing which paths are in it.
 
 #### Shortest: N hops
 
-`Shortest: N hops` is the fewest hops any returned chain uses between the two tables, counted in the relation graph rather than in foreign keys alone, so tier C and tier D hops count. It measures distance, not usefulness: the shortest chain can still be the wrong business route.
+`Shortest: N hops` in the results header is the fewest hops any returned chain uses between the two tables, counted in the relation graph rather than in foreign keys alone, so tier C and tier D hops count. It measures distance, not usefulness: the shortest chain can still be the wrong business route.
 
 #### Canonical and inferred
 
-A row marked `canonical` is the chain arbitrated by a D365FO domain owner for this table pair, pinned from `canonical-fixtures.json` and moved to the top of the list whatever the algorithm rank says. Its tooltip is that chain's `why` note, which states the posting or document step the hop sequence follows. Every other row is marked `inferred`: the ranking produced it and no arbitrated chain exists for the pair. Ranking signals cannot recover business intent on their own, which is why a pinned answer outranks them.
+A row marked `canonical` is the chain arbitrated by a D365FO domain owner for this table pair, pinned from `canonical-fixtures.json` and moved to the top of the list whatever the algorithm rank says. Its tooltip is that chain's `why` note, which states the posting or document step the hop sequence follows. Every other row is marked `inferred` unless its single hop is a header→line relation, in which case it shows that pill instead: a row carries one badge, and the order is canonical, then header→line, then inferred.
 
-`Known canonical path` is the same knowledge outside the ranking. That block holds the must-surface chains of the validated fixtures for this pair, shown whether or not the ranking reaches them, because an asserted chain can rank below the top N and still be the right answer. Rows already in the list are not repeated there; they carry the `canonical` pill instead. If a chain is longer than the current hop limit the page says so and names the hop count: raise max hops and it can be enumerated and pinned.
+Pins are bidirectional. All 37 arbitrated pairs are stored in both directions, 74 entries in all, so `SalesLine → SalesTable` returns the same spine as `SalesTable → SalesLine`; a relation is the same fact whichever way you trace it. A pin also survives the tier gate: the chain is rebuilt straight from the graph when the search filter would have excluded it, because the pin is an arbitrated answer and the filter only scores evidence. `Known canonical path` is the same knowledge outside the ranking. That block holds the must-surface chains of the validated fixtures for this pair, shown whether or not the ranking reaches them, because an asserted chain can rank below the top N and still be the right answer. Rows already in the list are not repeated there; they carry the `canonical` pill instead. If a chain is longer than the current hop limit the page says so and names the hop count: raise max hops and it can be enumerated and pinned.
 
 ### Join quality
 
-#### Tier chips A–D
+#### Join tags
 
-Every hop carries a tier chip graded from the declared AOT relation. The chip tooltip, the Minimum join filter and the chain's own verdict all use the same wording, and the lowest tier in the chain decides whether the row gets `Copy X++` or `weakest hop X`.
+Rows no longer carry a tier chip per hop. A hop's tier still gates the search — the default is B, declared foreign keys, because A-only hid real relations and D brought back the cartesian bridges — but the only tier fact that changes what you do with a row is whether the join is paste-safe, and that is one tag on the row. A tag means the row has no `Copy X++` button; no tag means it does.
 
-A — foreign key with an index: enforced by the database, safe to paste into X++
+`scan` — foreign key declared, no index: a real relation, a query may need to scan the table
 
-B — foreign key declared, no index: a real relation, a query may need to scan
+`conditional` — the join also constrains a discriminator field, so an unqualified join can match the wrong rows
 
-C — conditional relation: the join also constrains a discriminator field
+`convention` — no foreign key declared for this relation: the names agree, nothing enforces them
 
-D — convention only: no foreign key declared for this relation
+#### Relation classes
 
-#### Weakest hop
-
-`weakest hop X` names the lowest tier in a chain that is not fully joinable, and it is the reason that row has no `Copy X++` button. One hop weaker than an indexed foreign key means a pasted join may scan the table, or in the conditional case may omit the discriminator and match the wrong rows.
+`header→line` is a relation class, not a grade, and it outranks every tier signal in both ranking profiles. It fires on a single hop when Microsoft's `TableGroup` says one table is the document header (`WorksheetHeader`, `TransactionHeader`) and the other its line (`WorksheetLine`, `TransactionLine`) and the join uses the header's own key: the same field on both sides, `RecId`, or a `*RecId` surrogate. On the shipped artifact it fires on 719 of the 58,310 hops, 1.2%, and 54% of those are tier C or D — which is exactly why tier cannot be trusted to surface them. It is derived from metadata with no curation, so it is a statement about what the tables are, not about which chain is the business answer.
 
 #### Bridge warnings
 
-A `⚠ table` flag means the path enters that table in a way that can multiply rows. The cartesian case is both neighbours joining the table on the same field, as `SalesTable > Currency > CustTrans` does on `CurrencyCode`: every sales order then pairs with every customer transaction sharing a currency. The quieter `setup-bridge` case is a broad Group, Reference or Parameter table used as a bridge. Read either flag as an instruction to check the where conditions, not as a rejected path.
+A `⚠ table` flag means the path enters that table in a way that can multiply rows. The cartesian case is both neighbours joining the table on the same field, as `SalesTable > Currency > CustTrans` does on `CurrencyCode`: every sales order then pairs with every customer transaction sharing a currency. The quieter setup-bridge case is a broad Group, Reference or Parameter table used as a bridge. Read either flag as an instruction to check the where conditions, not as a rejected path.
 
 #### Copy X++
 
-`Copy X++` appears only on all-tier-A chains, where every hop is an indexed foreign key and the database enforces the join. The snippet is a `select` with one `join` per hop, oriented in traversal direction, and it is paste-safe as written. A chain with any B, C or D hop gets `weakest hop X` instead, because the generated join would not be equivalent to the path shown.
+`Copy X++` appears only on all-tier-A chains, where every hop is an indexed foreign key and the database enforces the join. The snippet is a `select` with one `join` per hop, oriented in traversal direction, and it is paste-safe as written. A chain with any B, C or D hop gets a single join tag instead — `scan`, `conditional` or `convention` — because the generated join would not be equivalent to the path shown.
 
 ### Notes
 
 #### Top N shown
 
-`Top N shown` is a display fact, not a warning. Within the scoped subgraph the search enumerates every simple path up to the hop limit and returns the first N of that ranking, so the list is a slice of a complete ordering rather than a sample. Lower the hop limit or raise the minimum join to shorten it. Both endpoints are always allowed, so a table outside the scoped flows still resolves as a destination.
+`Top N shown` is a display fact, not a warning. Within the scoped subgraph the search enumerates every simple path up to the hop limit and returns the first 50 of that ranking, so the list is a slice of a complete ordering rather than a sample. Lower the hop limit to shorten it. Both endpoints are always allowed, so a table outside the scoped flows still resolves as a destination.
 
 #### Table not in the graph
 
@@ -176,4 +155,4 @@ A `⚠ table` flag means the path enters that table in a way that can multiply r
 
 #### Which graph is in use
 
-Every claim above is about the AOT artifact, and whether this build loaded it is the page's `graphAvailable` flag. With the artifact present, each hop is a declared D365FO relation graded A–D, and ranking is verified for the six core flows — sales, procurement, production, inventory, project, finance. Tables outside them still resolve, but the order is best-effort. Without the artifact, as in a public clone with no licensed environment, the page runs on the public seed graph and says so: relations may be stale, tiers and bridge detection do not apply, and an older scorer answers instead.
+Every claim above is about the AOT artifact, and whether this build loaded it is the page's `graphAvailable` flag. With the artifact present, each hop is a declared D365FO relation graded A–D, ranking is verified for the six core flows — sales, procurement, production, inventory, project, finance — and the tier gate, join tags, relation class and bridge detection all apply. Tables outside those flows still resolve, but the order is best-effort. Without the artifact, as in a public clone with no licensed environment, the page runs on the public seed graph and says so: relations may be stale, and tiers, join tags, the header→line class and bridge detection do not apply.

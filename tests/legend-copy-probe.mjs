@@ -46,10 +46,10 @@ gate(
   JSON.stringify(headings)
 )
 
-const mustHave = ['canonical', 'inferred', 'Tier chips', 'Weakest hop', 'Bridge warnings', 'Copy X++', 'Story', 'Evidence']
+const mustHave = ['canonical', 'inferred', 'Join tags', 'Relation classes', 'Bridge warnings', 'Copy X++', 'Story', 'Evidence', 'scan', 'conditional', 'convention']
 for (const term of mustHave) gate(`legend explains "${term}"`, legend.includes(term))
 
-const mustNotHave = ['qualityClass', 'weighted score', 'Business flow', 'cleanest path', 'reason chip', 'Search space sampled', 'class-3']
+const mustNotHave = ['qualityClass', 'weighted score', 'Tier chips A–D', 'weakest hop', 'Search space sampled', 'class-3']
 for (const dead of mustNotHave)
   gate(`retired vocabulary gone: "${dead}"`, !legend.toLowerCase().includes(dead.toLowerCase()))
 
@@ -69,6 +69,20 @@ gate(
   'bridge tooltips are fixed deck strings',
   bridgeTitles.length > 0 && bridgeTitles.every((t) => t === 'Both neighbours join the same field, so rows pair up freely.' || t === 'Broad setup table used as a bridge; rows may multiply.'),
   JSON.stringify([...new Set(bridgeTitles)].slice(0, 2))
+)
+
+const tagTitles = await p.locator('.join-tag').evaluateAll((els) => els.map((e) => e.getAttribute('title')))
+gate(
+  'join tags carry deck tooltips',
+  tagTitles.length === 0 ||
+    tagTitles.every((t) =>
+      [
+        'Declared FK, no index: a query may scan this table.',
+        'Join also constrains a discriminator field, so no Copy X++.',
+        'No FK declared: convention only, so no Copy X++.',
+      ].includes(t)
+    ),
+  JSON.stringify([...new Set(tagTitles)].slice(0, 3))
 )
 
 gate('zero page errors', errs.length === 0, errs.slice(0, 2).join(' | '))

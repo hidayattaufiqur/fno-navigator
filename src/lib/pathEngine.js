@@ -338,8 +338,8 @@ function viaOf(e) {
  * ── RELATION CLASS: header → line ─────────────────────────────────────────
  * Microsoft assigns `TableGroup` to encode what a table IS in a document:
  * `WorksheetHeader`/`TransactionHeader` hold the document, the matching
- * `WorksheetLine`/`TransactionLine` hold its rows. Measured on the artifact: 918
- * standard header→line relations across 680 distinct table pairs.
+ * `WorksheetLine`/`TransactionLine` hold its rows. Measured on the shipped
+ * artifact (2026-11-19, corrected): 719 header→line hops of 58,310 (1.2%).
  *
  * WHY THIS NEEDS TO BE FIRST-CLASS (defect 2026-11-19): `SalesLine -> SalesTable`
  * is the textbook header/line relation — `SalesLine.SalesId -> SalesTable.SalesId`
@@ -349,9 +349,9 @@ function viaOf(e) {
  * `SalesTable` is a header and `SalesLine` is its line and still got it wrong.
  *
  * The signal was already in the artifact as a cost multiplier. A cost term is
- * washed out by tier; a relation CLASS is not. 44% of standard header→line
- * relations are tier C or D (A 332 / B 43 / C 141 / D 402), so tier alone cannot
- * separate them from noise — tier measures enforcement, not meaning.
+ * washed out by tier; a relation CLASS is not. 54% of them are tier C or D
+ * (A 292 / B 41 / C 36 / D 350), so tier alone cannot separate them from noise —
+ * tier measures enforcement, not meaning.
  */
 const HEADER_GROUPS = { WorksheetHeader: 'WorksheetLine', TransactionHeader: 'TransactionLine' }
 

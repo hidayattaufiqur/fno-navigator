@@ -40,9 +40,9 @@
   // the generated verification graph is present; anything else means this build
   // has only the public seed map and must use the legacy scorer.
   let graphStatus = 'idle'
-  // Default minimum join is B, not A. A-only hid too many real relations: 44% of
-  // the 918 standard header→line relations are tier C or D, so a strict A default
-  // deleted genuine answers and left detours. D brought back the cartesian bait
+  // Default minimum join is B, not A. A-only hid too many real relations: 54% of
+  // the 719 header→line hops are tier C or D, so a strict A default deleted
+  // genuine answers and left detours. D brought back the cartesian bait
   // (Currency, CashDisc). B keeps declared FKs and drops convention-only hops.
   //
   // The tier CONTROL is gone from the toolbar (2026-11-19): with a derived
@@ -64,6 +64,22 @@
   let canonicalMap = new Map()
   let canonicalWhy = new Map()
   let canonicalReady = false
+
+  /**
+   * Tooltips for the RETIRED seed-engine branch only.
+   *
+   * The copy deck is about the AOT page, so the gate compares TOOLTIP_COPY
+   * against that table and these keys cannot live there. They were deleted in
+   * the 2026-11-19 rewrite, which left four lookups resolving to undefined and
+   * rendering empty `title` attributes on a public clone (no AOT artifact, so the
+   * seed branch is the one that renders). Kept local and small.
+   */
+  const SEED_TOOLTIP_COPY = {
+    'cleanest-path': 'The #1 row under class, score, and hop ranking.',
+    'business-flow': 'Follows a document flow with continuous document IDs.',
+    curated: 'Verified by the app team, pinned from the dataset, not algorithm-ranked.',
+    'reason-chips': "Each chip names evidence behind this path's rank.",
+  }
 
   const TIER_MEANING = {
     A: 'A — foreign key with an index: enforced by the database, safe to paste into X++',
@@ -972,11 +988,11 @@
           <div class="sort-toggle" role="group" aria-label="Ranking profile">
             <button type="button" class="sort-btn"
               class:sort-active={rankBy === 'evidence'} aria-pressed={rankBy === 'evidence'}
-              title="Rank on D365FO metadata alone: join type, table group, deprecation"
+              title={TOOLTIP_COPY['rank-evidence']}
               on:click={() => setFilter('rank', 'evidence')}>Evidence</button>
             <button type="button" class="sort-btn"
               class:sort-active={rankBy === 'canonical'} aria-pressed={rankBy === 'canonical'}
-              title="Favour documented business flows: follow the ordered stages of the six core processes"
+              title={TOOLTIP_COPY['rank-story']}
               on:click={() => setFilter('rank', 'canonical')}>Story</button>
           </div>
         </fieldset>
@@ -1055,9 +1071,9 @@
           {pathResults.length}{truncated ? '+' : ''} path{pathResults.length !== 1 ? 's' : ''}
           from <strong>{sourceTable}</strong> to <strong>{targetTable}</strong>
           {#if shortestHops !== null}
-            · shortest <strong>{shortestHops}</strong> hop{shortestHops !== 1 ? 's' : ''}
+            · <span title={TOOLTIP_COPY['shortest-hops']}>shortest <strong>{shortestHops}</strong> hop{shortestHops !== 1 ? 's' : ''}</span>
           {/if}
-          · {#if graphAvailable}weakest join {tierFilter} · {rankBy === 'canonical' ? 'documented flows favoured' : 'metadata evidence only'}{:else if sortMode === 'shortest'}fewest hops first{:else}ranked by class &amp; score{/if}
+          · {#if graphAvailable}joins at {tierFilter} or better · {rankBy === 'canonical' ? 'documented flows favoured' : 'metadata evidence only'}{:else if sortMode === 'shortest'}fewest hops first{:else}ranked by class &amp; score{/if}
         </span>
         <!-- Legend: badge explanations next to the results header (DESIGN.md
              §/find.5) — collapsed by default, dossier copy unchanged. -->
@@ -1102,14 +1118,16 @@
       </div>
 
       {#if truncated}
-        <p
-          class="finder-note"
-          data-tip={TOOLTIP_COPY['sampled-note']}
-          tabindex="0"
-          aria-describedby="find-tip"
-        >{graphAvailable
-            ? `Top ${pathResults.length} shown — more ranked paths exist for this pair.`
-            : `Search space sampled: showing ${pathResults.length} of many more possible paths. Reduce max hops for a shorter list.`}</p>
+        {#if graphAvailable}
+          <p
+            class="finder-note"
+            data-tip={TOOLTIP_COPY['truncated-note']}
+            tabindex="0"
+            aria-describedby="find-tip"
+          >Top {pathResults.length} shown — more ranked paths exist for this pair.</p>
+        {:else}
+          <p class="finder-note">Search space sampled: showing {pathResults.length} of many more possible paths. Reduce max hops for a shorter list.</p>
+        {/if}
       {/if}
     {/if}
 
@@ -1149,10 +1167,10 @@
             <span class="canonical-badge">{c.hops} hop{c.hops !== 1 ? 's' : ''}</span>
             <span
               class="curated-badge"
-              data-tip={TOOLTIP_COPY.curated}
+              data-tip={TOOLTIP_COPY.canonical}
               tabindex="0"
               aria-describedby="find-tip"
-            >curated</span>
+            >canonical</span>
           </div>
         {/each}
       </div>
@@ -1271,7 +1289,7 @@
                     <!-- Layer 1: a derivable relation class, not a curated pin. -->
                     <span
                       class="class-badge"
-                      title="Header→line relation: one table is the document header and the other its line, joined on the header's own key. Derived from TableGroup, no curation."
+                      title={TOOLTIP_COPY['header-line']}
                     >
                       header→line
                     </span>
@@ -1282,35 +1300,38 @@
                     <button
                       type="button"
                       class="copy-xpp-btn"
-                      title="Copy this chain as an X++ select-join — every hop is an indexed foreign key"
+                      title={TOOLTIP_COPY['copy-xpp']}
                       on:click={() => copyXpp(result)}
                     >{copiedKey === result.key ? 'Copied' : 'Copy X++'}</button>
                   {:else}
                     <!-- One tag instead of four chips. It carries the only tier
                          fact that changes behaviour: why this row has no
                          Copy X++ button. -->
-                    <span class="join-tag join-tag-{result.tierFloor}" title={TIER_MEANING[result.tierFloor]}>
+                    <span
+                      class="join-tag join-tag-{result.tierFloor}"
+                      title={TOOLTIP_COPY['tag-' + (result.tierFloor === 'B' ? 'scan' : result.tierFloor === 'C' ? 'conditional' : 'convention')]}
+                    >
                       {result.tierFloor === 'B' ? 'scan' : result.tierFloor === 'C' ? 'conditional' : 'convention'}
                     </span>
                   {/if}
                 {:else if i === cleanestIndex}
                   <span
                     class="cleanest-badge"
-                    data-tip={TOOLTIP_COPY['cleanest-path']}
+                    data-tip={SEED_TOOLTIP_COPY['cleanest-path']}
                     tabindex="0"
                     aria-describedby="find-tip"
                   >cleanest path</span>
                 {:else if result.qualityClass === 3}
                   <span
                     class="class3-badge"
-                    data-tip={TOOLTIP_COPY['business-flow']}
+                    data-tip={SEED_TOOLTIP_COPY['business-flow']}
                     tabindex="0"
                     aria-describedby="find-tip"
                   >Business flow</span>
                 {:else if isCurated}
                   <span
                     class="curated-badge"
-                    data-tip={TOOLTIP_COPY.curated}
+                    data-tip={SEED_TOOLTIP_COPY.curated}
                     tabindex="0"
                     aria-describedby="find-tip"
                   >curated</span>
@@ -1357,7 +1378,7 @@
                   class="reason-chips"
                   role="list"
                   aria-label="Why this path ranks here"
-                  data-tip={TOOLTIP_COPY['reason-chips']}
+                  data-tip={SEED_TOOLTIP_COPY['reason-chips']}
                   tabindex="-1"
                 >
                   {#each result.reasonCodes as code}
