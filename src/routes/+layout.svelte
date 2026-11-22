@@ -3,7 +3,7 @@
   import { onMount } from 'svelte'
   import { page } from '$app/stores'
   import { afterNavigate } from '$app/navigation'
-  import { flows, tableDefs } from '$lib/data/flows'
+  import { flows, allTableNames } from '$lib/data/flows'
 
   let search = ''
   let sidebarOpen = false
@@ -60,7 +60,7 @@
     return result
   })()
 
-  $: tableCount = Object.keys(tableDefs).length
+  $: tableCount = allTableNames.length
 </script>
 
 <div class="mobile-bar">

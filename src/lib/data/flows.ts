@@ -8347,3 +8347,16 @@ export const tableDefs: Record<string, TableDef> = {
     ],
   },
 }
+
+/** Every table the dataset knows about: stage-referenced tables plus full defs.
+ *  A stage may reference a table that has no def (CustInterest, PaymTerm), so the
+ *  union is the real population and every UI count must read this, never a subset.
+ *  Frozen: sort() is applied once here so consumers cannot reorder shared state. */
+export const allTableNames: readonly string[] = Object.freeze(
+  Array.from(
+    new Set([
+      ...flows.flatMap((flow) => flow.stages.flatMap((stage) => stage.tables)),
+      ...Object.keys(tableDefs),
+    ])
+  ).sort()
+)

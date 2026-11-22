@@ -1,5 +1,5 @@
 <script>
-  import { flows, modules, tableDefs } from '$lib/data/flows'
+  import { flows, modules, allTableNames } from '$lib/data/flows'
 
   $: grouped = modules
     .filter((m) => m !== 'All')
@@ -10,7 +10,7 @@
     .filter((g) => g.flows.length > 0)
 
   $: totalStages = flows.reduce((n, f) => n + f.stages.length, 0)
-  $: totalTables = Object.keys(tableDefs).length
+  $: totalTables = allTableNames.length
 </script>
 
 <svelte:head>
