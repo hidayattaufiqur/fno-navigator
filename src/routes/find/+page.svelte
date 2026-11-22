@@ -485,6 +485,17 @@
   $: sourceSuggestions = getSuggestions(sourceInput, sourceTable)
   $: targetSuggestions = getSuggestions(targetInput, targetTable)
 
+  // A typed name that exactly matches a known table is a valid selection even if the
+  // user never opened the dropdown. Without this, typing both names and pressing Find
+  // reported "Pick both" at a fully filled form. Exact match only — a typo must fail
+  // loudly rather than search a different table.
+  /** @param {string} input */
+  function resolveTypedTable(input) {
+    const typed = input.trim().toLowerCase()
+    if (!typed) return ''
+    return allKnownTables.find((name) => name.toLowerCase() === typed) ?? ''
+  }
+
   // @param {string} name
   function selectSource(name) {
     sourceTable = name
@@ -514,8 +525,17 @@
   // @param {KeyboardEvent} e @param {'source' | 'target'} which
   function handleInputKey(e, which) {
     const suggestions = which === 'source' ? sourceSuggestions : targetSuggestions
-    if (e.key === 'Enter' && suggestions.length > 0) {
-      which === 'source' ? selectSource(suggestions[0]) : selectTarget(suggestions[0])
+    if (e.key === 'Enter') {
+      if (suggestions.length > 0) {
+        which === 'source' ? selectSource(suggestions[0]) : selectTarget(suggestions[0])
+        // Selecting from the dropdown fills only one field; only submit when the
+        // other side is already resolved, so a first Enter never errors.
+        if (sourceTable && targetTable) handleFind()
+      } else {
+        // Dropdown closed: resolve the typed text and submit. This is the gesture
+        // the issue reported; without it Enter was a dead key.
+        handleFind()
+      }
     } else if (e.key === 'Escape') {
       which === 'source' ? (sourceSuggestions = []) : (targetSuggestions = [])
     }
@@ -570,11 +590,6 @@
     shortestHops = null
     missing = []
 
-    if (!sourceTable || !targetTable) {
-      searchError = 'Pick both a source and a target table first.'
-      return
-    }
-
     if ($fkLoadState !== 'ready') {
       searchState = 'running'
       await loadFkMap()
@@ -583,6 +598,23 @@
         searchError = `Failed to load FK data: ${$fkLoadError}`
         return
       }
+    }
+
+    // Inputs are the source of truth on submit: a keystroke clears the resolved
+    // selection (see the on:input handlers), so a correctly typed pair would
+    // otherwise trip the guard below.
+    if (!sourceTable) {
+      sourceTable = resolveTypedTable(sourceInput)
+      if (sourceTable) sourceInput = sourceTable // normalise casing to the canonical name
+    }
+    if (!targetTable) {
+      targetTable = resolveTypedTable(targetInput)
+      if (targetTable) targetInput = targetTable
+    }
+
+    if (!sourceTable || !targetTable) {
+      searchError = 'Pick both a source and a target table first.'
+      return
     }
 
     // v2 ranking depends on the edge-specificity artifact (Q7-Q9); without it

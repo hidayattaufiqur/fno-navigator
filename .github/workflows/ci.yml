@@ -31,6 +31,9 @@ jobs:
       - name: Table count single source
         run: node tests/table-count-single-source.mjs
 
+      - name: Typed-input resolution (exact match only, typos rejected)
+        run: node tests/find-resolve-typed-input.mjs
+
       - name: Fixture existence validation
         run: node tests/validate-fixtures.mjs
 
