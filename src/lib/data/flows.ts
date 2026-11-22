@@ -11,6 +11,16 @@ export type Stage = {
   /** Conditional-FK / polymorphic badge, e.g. "conditional FK — requires AccountCode" */
   relations?: { from: string; to: string; note?: string; fields?: string[]; badge?: string }[]
   approvals?: string[]
+  /** What this stage posts, and what it deliberately does not. Presence means "authored";
+   *  absence means "not yet reviewed" — the two are different and the UI must not conflate
+   *  them. An authored stage with an empty `creates` genuinely posts nothing. */
+  impact?: {
+    /** Journals / transactions / documents this action writes. Must exist in `stage.tables`. */
+    creates?: string[]
+    /** Tables a reader would reasonably expect this action to write, and which it does not.
+     *  Need not be in `stage.tables` — that absence is the point. */
+    doesNot?: string[]
+  }
   /** Off the happy path: a branch, not a mandatory sequential step */
   optional?: boolean
 }

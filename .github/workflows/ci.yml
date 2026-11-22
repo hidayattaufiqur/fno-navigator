@@ -39,3 +39,6 @@ jobs:
 
       - name: Performance budget (unique-mode p95 <= 300ms)
         run: node tests/bench.mjs
+
+      - name: Stage impact validation (creates in stage.tables, doesNot resolved)
+        run: node tests/validate-impact.mjs
