@@ -619,6 +619,10 @@ export const flows: Flow[] = [
         pitfalls: ['Financial dimensions missing', 'Catalog access not set'],
         prerequisites: ['Vendors and products released', 'Financial dimensions'],
         tables: ['PurchReqTable', 'PurchReqLine', 'VendTable', 'DimensionAttributeValueCombination', 'PurchReqTableHistory'],
+        impact: {
+          creates: ['PurchReqTable', 'PurchReqLine', 'PurchReqTableHistory'],
+          doesNot: ['PurchTable', 'VendTrans'],
+        },
         approvals: ['Requisition approval workflow']
       },
       {
@@ -636,6 +640,10 @@ export const flows: Flow[] = [
         pitfalls: ['Vendor delivery terms missing', 'Ordering vendor and invoice vendor confused — OrderAccount and InvoiceAccount are separate FKs and may point at different vendors'],
         prerequisites: ['Vendor, terms, charges, taxes'],
         tables: ['PurchTable', 'PurchLine', 'VendTable', 'TaxGroupHeading', 'MarkupAutoTable', 'AgreementHeader', 'AgreementLine', 'PurchTableHistory', 'PurchLineHistory'],
+        impact: {
+          creates: ['PurchTable', 'PurchLine', 'PurchTableHistory', 'PurchLineHistory'],
+          doesNot: ['VendTrans', 'InventTrans', 'VendPackingSlipJour'],
+        },
         relations: [
           {
             from: 'PurchTable',
@@ -691,6 +699,10 @@ export const flows: Flow[] = [
         ],
         prerequisites: ['PO approved', 'Print management / vendor contact destination'],
         tables: ['PurchTable', 'PurchLine', 'PurchTableHistory', 'PurchLineHistory'],
+        impact: {
+          creates: [],
+          doesNot: ['VendPackingSlipJour', 'VendTrans'],
+        },
         relations: [
           {
             from: 'PurchTable',
@@ -723,6 +735,10 @@ export const flows: Flow[] = [
         pitfalls: ['Unit mismatch vs invoice'],
         prerequisites: ['Item model group', 'Unit conversions'],
         tables: ['PurchTable', 'PurchLine', 'VendPackingSlipJour', 'VendPackingSlipTrans', 'InventTrans'],
+        impact: {
+          creates: ['VendPackingSlipJour', 'VendPackingSlipTrans', 'InventTrans'],
+          doesNot: ['VendTrans', 'VendSettlement', 'GeneralJournalEntry'],
+        },
         relations: [
           {
             from: 'VendPackingSlipJour',
@@ -754,6 +770,10 @@ export const flows: Flow[] = [
         ],
         prerequisites: ['Vendor posting profiles', 'Tax groups', 'Invoice matching policy and tolerances'],
         tables: ['VendInvoiceJour', 'VendInvoiceTrans', 'VendTrans', 'TaxTrans', 'SubledgerVoucherGeneralJournalEntry', 'GeneralJournalEntry', 'GeneralJournalAccountEntry', 'VendInvoiceInfoTable', 'VendInvoiceInfoLine', 'PurchTable', 'PurchLine', 'VendTable', 'VendItemMatchingPolicy', 'VendInvoiceMatching', 'VendParameters'],
+        impact: {
+          creates: ['VendInvoiceJour', 'VendInvoiceTrans', 'VendTrans', 'TaxTrans', 'SubledgerVoucherGeneralJournalEntry', 'GeneralJournalEntry', 'GeneralJournalAccountEntry'],
+          doesNot: ['VendPackingSlipJour', 'InventTrans', 'VendSettlement'],
+        },
         relations: [
           {
             from: 'VendInvoiceTrans',
@@ -851,6 +871,10 @@ export const flows: Flow[] = [
         ],
         prerequisites: ['Original posted invoice or receipt', 'Return reason / disposition'],
         tables: ['PurchTable', 'PurchLine', 'VendPackingSlipJour', 'VendPackingSlipTrans', 'VendInvoiceJour', 'VendInvoiceTrans', 'VendTrans', 'VendSettlement'],
+        impact: {
+          creates: ['PurchTable', 'PurchLine', 'VendPackingSlipJour', 'VendPackingSlipTrans', 'VendInvoiceJour', 'VendInvoiceTrans', 'VendTrans'],
+          doesNot: ['VendSettlement'],
+        },
         relations: [
           {
             from: 'VendPackingSlipJour',
@@ -889,7 +913,11 @@ export const flows: Flow[] = [
           'Payment proposal and manual journal are different entry routes; a proposal not transferred/posted leaves the journal unposted',
         ],
         prerequisites: ['Bank account', 'Method of payment', 'Vendor terms'],
-        tables: ['VendTrans', 'VendTransOpen', 'VendSettlement', 'LedgerJournalTable', 'LedgerJournalTrans', 'BankAccountTable'],
+        tables: ['VendTrans', 'VendTransOpen', 'VendSettlement', 'LedgerJournalTable', 'LedgerJournalTrans', 'BankAccountTable', 'BankAccountTrans'],
+        impact: {
+          creates: ['LedgerJournalTable', 'LedgerJournalTrans', 'VendSettlement', 'VendTrans', 'BankAccountTrans'],
+          doesNot: ['VendInvoiceJour', 'PurchTable'],
+        },
         relations: [
           {
             from: 'VendTransOpen',
