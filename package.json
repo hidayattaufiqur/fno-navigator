@@ -7,7 +7,7 @@
     "dev": "vite dev",
     "build": "vite build",
     "preview": "vite preview",
-    "prepare": "svelte-kit sync",
+    "prepare": "svelte-kit sync && git config core.hooksPath scripts/hooks || true",
     "generate:map": "node tools/generate-map.mjs",
     "verify:map": "node tools/generate-map.mjs --verify",
     "probe:graph": "node tests/e2e-graph-probe.mjs",
