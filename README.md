@@ -83,6 +83,17 @@ npm run preview        # preview the production build
 npm run verify:map     # dataset fingerprint + counts + source sha read-back
 ```
 
+### Pre-push guard
+
+Two CI checks catch "you edited one half of a hand-mirrored pair": `check-legend-copy` (`src/lib/findLegendCopy.js` vs `find-legend-copy.md`) and `verify:map` (`fk-map.json` vs `map-manifest.json`). Both are fast and offline, so they run before the push instead of after it:
+
+```sh
+ln -sf ../../scripts/pre-push.sh .git/hooks/pre-push   # once per clone
+FNO_SKIP_PREPUSH=1 git push                            # deliberate bypass
+```
+
+Every red CI run in this repo's history came from one of those two pairs drifting within a single commit; the hook exists so that failure is a local message instead of a red badge.
+
 Stack: SvelteKit 2 with `adapter-static` (`fallback: 'index.html'`), Svelte 5, Vite 7, and TypeScript data-as-code for the flow and table definitions. The 2D graph uses Sigma 3, Graphology 0.26 and ForceAtlas2; the 3D view uses 3d-force-graph 1.80 and three 0.185.
 
 The site is a client-rendered SPA (`ssr = false`, `prerender = false`), so the build emits a single `build/index.html` plus hashed assets. It is served as static files from the author's own host. Any static host works provided unknown paths fall back to `index.html`. Without that fallback, deep links such as `/tables/SalesTable` return 404.
