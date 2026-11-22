@@ -16,34 +16,9 @@
 //
 // Stated limit: this proves internal consistency, NOT that the posting claim is true about
 // D365FO. Truth is a reviewer's job. Same split the repo already uses for relation fields[].
-//
-// allTableNames is not on this branch (it ships with the routing/count PR), so the union is
-// derived here. Keep the two definitions in sync; if allTableNames lands, import it instead.
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { flows, allTableNames } from '../src/lib/data/flows.ts'
 
-const ROOT = join(import.meta.dirname, '..')
-const src = readFileSync(join(ROOT, 'src/lib/data/flows.ts'), 'utf8')
-
-// Load the data module without a TS toolchain: strip the type annotations the file uses at
-// the top level, then evaluate. The module is plain object/array literals below the types.
-const { flows, tableDefs } = await import(
-  'data:text/javascript;base64,' +
-    Buffer.from(
-      src
-        .replace(/^export type [\s\S]*?\n}\n/gm, '')
-        .replace(/^export (const (roles|modules|flows): [^=]+=)/gm, 'export $1')
-        .replace(/: (Flow|Stage|TableDef|TableField)\[\]/g, '')
-        .replace(/: Record<string, TableDef>/g, '')
-        .replace(/: (string|number|boolean)(\[\])?(?=\s*[,)=])/g, ''),
-      'utf8'
-    ).toString('base64')
-)
-
-const allTableNames = new Set([
-  ...flows.flatMap((flow) => flow.stages.flatMap((stage) => stage.tables)),
-  ...Object.keys(tableDefs),
-])
+const known = new Set(allTableNames)
 
 const failures = []
 const fail = (msg) => failures.push(msg)
@@ -70,7 +45,7 @@ for (const flow of flows) {
       }
     }
     for (const name of doesNot) {
-      if (!allTableNames.has(name)) {
+      if (!known.has(name)) {
         fail(`${where}: doesNot '${name}' is not a known table — probable typo`)
       }
     }
@@ -88,4 +63,5 @@ if (failures.length) {
   process.exit(1)
 }
 
-console.log(`OK impact blocks valid — ${authored} authored stage(s), ${flows.reduce((n, f) => n + f.stages.length, 0)} total`)
+const total = flows.reduce((n, f) => n + f.stages.length, 0)
+console.log(`OK impact blocks valid — ${authored} authored stage(s), ${total} total`)
