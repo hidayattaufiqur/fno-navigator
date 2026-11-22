@@ -28,6 +28,9 @@ jobs:
       - name: Copy-drift check (findLegendCopy.js vs dossier)
         run: node tests/check-legend-copy.mjs
 
+      - name: Table count single source
+        run: node tests/table-count-single-source.mjs
+
       - name: Typed-input resolution (exact match only, typos rejected)
         run: node tests/find-resolve-typed-input.mjs
 

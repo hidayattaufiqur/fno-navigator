@@ -11,6 +11,10 @@
       : ''
 </script>
 
+<svelte:head>
+  <title>{$page.status} · FnO Navigator</title>
+</svelte:head>
+
 <div class="error-page">
   <p class="eyebrow">Error {$page.status}</p>
   <h2>{$page.error?.message ?? 'Something went wrong'}</h2>

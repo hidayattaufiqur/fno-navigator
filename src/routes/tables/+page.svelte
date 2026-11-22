@@ -1,5 +1,5 @@
 <script>
-  import { flows, tableDefs } from '$lib/data/flows'
+  import { flows, tableDefs, allTableNames } from '$lib/data/flows'
   import { canonicalModule, missingTableIssueUrl } from '$lib/utils'
   import { page } from '$app/stores'
 
@@ -22,12 +22,9 @@
   let searchQuery = ''
   let moduleFilter = 'All'
 
-  // Union of flow-stage tables and standalone tableDefs (def-only, e.g. SysTableIdTable,
-  // are reachable by URL and documented but appear in no stage). Reference-only rows carry
-  // no stage usage, so every read of tableUsageIndex must tolerate undefined.
-  $: allTableNames = Array.from(
-    new Set([...Object.keys(tableUsageIndex), ...Object.keys(tableDefs)])
-  ).sort()
+  // allTableNames (imported) is the union of flow-stage tables and standalone tableDefs —
+  // see flows.ts. Reference-only rows carry no stage usage, so every read of
+  // tableUsageIndex must tolerate undefined.
 
   // Canonical module names for filter pills (≤8 clean names instead of 54 raw CDM strings)
   $: moduleOptions = [
