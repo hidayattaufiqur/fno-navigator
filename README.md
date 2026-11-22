@@ -128,4 +128,16 @@ The relationship data originates as HTML ERD files Microsoft published in `Micro
 
 ## Contributing
 
+The two drift guards (copy deck vs `findLegendCopy.js`, `fk-map.json` vs `map-manifest.json`) run locally as a **pre-push hook**, so a mismatch is a message in your terminal instead of a red badge on the repo.
+
+Hooks live in `scripts/hooks/` and are wired by `npm install` — the `prepare` script sets `core.hooksPath`, so `npm ci` is the only setup step:
+
+```sh
+npm ci                 # also wires the pre-push hook
+FNO_SKIP_PREPUSH=1 git push   # deliberate bypass for a WIP push
+```
+
+If you cloned before this existed, run `git config core.hooksPath scripts/hooks` once.
+
+
 See `CONTRIBUTING.md` for issue and pull request guidelines, branch naming and commit style.
