@@ -273,6 +273,32 @@
       </div>
     {/if}
 
+    {#if stage.impact && (stage.impact.creates?.length || stage.impact.doesNot?.length)}
+      <div class="aside-card aside-impact">
+        <div class="card-label">Posting Impact</div>
+        {#if stage.impact.creates?.length}
+          <div class="impact-row">
+            <span class="impact-key impact-creates">Creates</span>
+            <ul>
+              {#each stage.impact.creates as tableName}
+                <li class="mini"><a href="/tables/{tableName}" class="impact-table">{tableName}</a></li>
+              {/each}
+            </ul>
+          </div>
+        {/if}
+        {#if stage.impact.doesNot?.length}
+          <div class="impact-row">
+            <span class="impact-key impact-doesnot">Does not create</span>
+            <ul>
+              {#each stage.impact.doesNot as tableName}
+                <li class="mini"><a href="/tables/{tableName}" class="impact-table">{tableName}</a></li>
+              {/each}
+            </ul>
+          </div>
+        {/if}
+      </div>
+    {/if}
+
     {#if stage.docs.length}
       <div class="aside-card">
         <div class="card-label">Learn More</div>
@@ -300,6 +326,33 @@
 </div>
 
 <style>
+  .impact-row {
+    margin-bottom: 10px;
+  }
+  .impact-row:last-child {
+    margin-bottom: 0;
+  }
+  .impact-row ul {
+    margin: 4px 0 0;
+    padding-left: 16px;
+  }
+  .impact-key {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .impact-creates {
+    color: var(--clr-green);
+  }
+  .impact-doesnot {
+    color: var(--clr-text-faint);
+  }
+  .impact-table {
+    font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    overflow-wrap: anywhere;
+  }
+
   .schema-count {
     font-size: 11px;
     font-weight: 400;
