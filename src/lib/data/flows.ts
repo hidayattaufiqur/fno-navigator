@@ -109,10 +109,13 @@ export const flows: Flow[] = [
         pitfalls: [
           'A zero credit limit blocks only when CustTable.MandatoryCreditLimit = Yes — an unset limit is not a zero-limit block',
           'Price/discount agreement not active for the quote date — wrong price pulled',
-          'Expiry date not set — quote stays open indefinitely',
-        ],
+          'Expiry date not set — quote stays open indefinitely',, 'A quotation line with a negative quantity does create an InventTrans row, but at status QuotationIssue / QuotationReceipt \u2014 it is not a reservation (no ReservPhysical/ReservOrdered).'],
         prerequisites: ['Customer account (CustTable)', 'Price/discount agreement (optional)'],
         tables: ['SalesQuotationTable', 'SalesQuotationLine', 'CustTable', 'PriceDiscTable', 'PriceDiscAdmTrans'],
+        impact: {
+          creates: ['SalesQuotationTable', 'SalesQuotationLine'],
+          doesNot: ['SalesTable', 'CustTrans'],
+        },
         relations: [
           {
             from: 'SalesQuotationTable',
@@ -163,7 +166,11 @@ export const flows: Flow[] = [
           'SalesTable.InvoiceAccount ≠ CustAccount — the invoice goes to a different customer than the order',
         ],
         prerequisites: ['Released product (InventTable)', 'Site and warehouse configured'],
-        tables: ['SalesTable', 'SalesLine', 'CustTable', 'InventDim', 'InventTable', 'AgreementHeader', 'AgreementLine', 'SalesAgreementHeader'],
+        tables: ['SalesTable', 'SalesLine', 'CustTable', 'InventDim', 'InventTable', 'AgreementHeader', 'AgreementLine', 'SalesAgreementHeader', 'InventTrans'],
+        impact: {
+          creates: ['SalesTable', 'SalesLine', 'InventTrans'],
+          doesNot: ['CustConfirmJour', 'CustTrans', 'VendTrans'],
+        },
         relations: [
           {
             from: 'SalesTable',
@@ -222,7 +229,11 @@ export const flows: Flow[] = [
           'Confirmation posting is skipped when the order is already confirmed — CustConfirmJour holds one row per confirmation posting, not one per order',
         ],
         prerequisites: ['Sales order created', 'Confirmation print/Posting setup (Print management)'],
-        tables: ['SalesTable', 'CustConfirmJour', 'CustConfirmTrans'],
+        tables: ['SalesTable', 'CustConfirmJour', 'CustConfirmTrans', 'CustConfirmSalesLink'],
+        impact: {
+          creates: ['CustConfirmJour', 'CustConfirmTrans', 'CustConfirmSalesLink'],
+          doesNot: ['CustInvoiceJour', 'CustTrans', 'InventTrans'],
+        },
         relations: [
           {
             from: 'CustConfirmJour',
@@ -261,10 +272,13 @@ export const flows: Flow[] = [
         pitfalls: [
           'Reservation hierarchy blocks batch/serial from being auto-reserved',
           'Wave template or work template not configured for the warehouse',
-          'Location directive not covering the item type or zone',
-        ],
+          'Location directive not covering the item type or zone',, 'Packing slip updates the existing InventTrans row (OnOrder \u2192 Deducted) rather than inserting another, unless a partial delivery splits it.'],
         prerequisites: ['Location directives', 'Work templates', 'Wave templates'],
-        tables: ['WHSWorkTable', 'WHSWorkLine', 'WHSShipmentTable', 'WHSLoadTable', 'InventTrans', 'InventTransOrigin', 'WMSPickingRoute', 'CustPackingSlipJour', 'CustPackingSlipTrans'],
+        tables: ['WHSWorkTable', 'WHSWorkLine', 'WHSShipmentTable', 'WHSLoadTable', 'InventTrans', 'InventTransOrigin', 'WMSPickingRoute', 'CustPackingSlipJour', 'CustPackingSlipTrans', 'CustPackingSlipVersion', 'InventTransPosting'],
+        impact: {
+          creates: ['CustPackingSlipJour', 'CustPackingSlipTrans', 'CustPackingSlipVersion', 'InventTransPosting'],
+          doesNot: ['CustInvoiceJour', 'CustTrans'],
+        },
         relations: [
           {
             from: 'WHSWorkLine',
@@ -348,6 +362,10 @@ export const flows: Flow[] = [
         ],
         prerequisites: ['Customer posting profiles', 'Sales tax codes and groups'],
         tables: ['CustInvoiceJour', 'CustInvoiceTrans', 'CustInvoiceTable', 'CustInvoiceLine', 'CustTrans', 'TaxTrans', 'GeneralJournalEntry', 'GeneralJournalAccountEntry', 'SubledgerVoucherGeneralJournalEntry', 'SpecTrans', 'TaxTable', 'TaxGroupHeading', 'TaxItemGroupHeading'],
+        impact: {
+          creates: ['CustInvoiceJour', 'CustInvoiceTrans', 'CustTrans', 'TaxTrans'],
+          doesNot: ['CustInvoiceTable', 'CustInvoiceLine', 'CustSettlement', 'GeneralJournalEntry', 'VendTrans'],
+        },
         relations: [
           {
             from: 'CustInvoiceJour',
@@ -444,7 +462,11 @@ export const flows: Flow[] = [
           'A credit note is a posted CustInvoiceJour row with IsCorrection set and ReversedRecId pointing at the original invoice — not a delete of the original',
         ],
         prerequisites: ['Return reason codes', 'Original posted invoice (for a credit note)'],
-        tables: ['SalesTable', 'SalesLine', 'ReturnReasonCode', 'CustInvoiceJour', 'CustInvoiceTrans', 'CustTrans', 'CustSettlement'],
+        tables: ['SalesTable', 'SalesLine', 'ReturnReasonCode', 'CustInvoiceJour', 'CustInvoiceTrans', 'CustTrans', 'CustSettlement', 'InventTrans', 'CustPackingSlipJour', 'CustPackingSlipTrans', 'InventTransPosting'],
+        impact: {
+          creates: ['SalesTable', 'SalesLine', 'CustInvoiceJour', 'CustInvoiceTrans', 'CustTrans', 'InventTrans', 'CustPackingSlipJour', 'CustPackingSlipTrans'],
+          doesNot: ['CustSettlement', 'VendTrans'],
+        },
         relations: [
           {
             from: 'SalesTable',
@@ -487,6 +509,10 @@ export const flows: Flow[] = [
         ],
         prerequisites: ['Bank account (BankAccountTable)', 'Method of payment'],
         tables: ['CustTrans', 'CustTransOpen', 'CustSettlement', 'SpecTrans', 'LedgerJournalTable', 'LedgerJournalTrans', 'BankAccountTable', 'BankAccountTrans', 'CashDisc'],
+        impact: {
+          creates: ['CustSettlement', 'CustTrans', 'LedgerJournalTable', 'LedgerJournalTrans', 'BankAccountTrans', 'SpecTrans'],
+          doesNot: ['CustInvoiceJour', 'GeneralJournalEntry'],
+        },
         relations: [
           {
             from: 'LedgerJournalTrans',
@@ -565,6 +591,10 @@ export const flows: Flow[] = [
         ],
         prerequisites: ['Collection letter sequences', 'Interest codes', 'Posting profiles'],
         tables: ['CustTrans', 'CustTransOpen', 'CustCollectionLetterJour', 'CustInterestJour', 'CustInterest', 'PaymTerm'],
+        impact: {
+          creates: ['CustCollectionLetterJour', 'CustInterestJour'],
+          doesNot: ['CustInvoiceJour', 'CustSettlement', 'CustTrans'],
+        },
         relations: [
           {
             from: 'CustTransOpen',
@@ -3021,6 +3051,129 @@ export const tableDefs: Record<string, TableDef> = {
       },
     ],
   },
+  InventTransPosting: {
+    name: "InventTransPosting",
+    description: "Inventory-to-ledger bridge; one row per physical or financial inventory posting, linking the InventTrans transaction to the voucher and date it hit the GL.",
+    module: "Inventory Management",
+    fields: [
+      {
+        name: "InventTransOrigin",
+        type: "Int64",
+        fkTarget: "InventTransOrigin.RecId",
+        note: "The inventory transaction identity this posting belongs to.",
+      },
+      {
+        name: "InventTransPostingType",
+        type: "Enum",
+        note: "Physical or Financial \u2014 which ledger posting this row records.",
+      },
+      {
+        name: "IsPosted",
+        type: "Enum",
+        note: "NoYes flag set once the posting has actually been written.",
+      },
+      {
+        name: "Voucher",
+        type: "String",
+        note: "Ledger voucher number the inventory movement posted under.",
+      },
+      {
+        name: "TransDate",
+        type: "Date",
+        note: "Posting date of the inventory transaction.",
+      },
+      {
+        name: "ItemId",
+        type: "String",
+        fkTarget: "InventTable.ItemId",
+        note: "Item that moved.",
+      },
+      {
+        name: "LedgerDimension",
+        type: "Int64",
+        note: "Main account dimension the inventory value posted to.",
+      },
+    ],
+  },
+  CustPackingSlipVersion: {
+    name: "CustPackingSlipVersion",
+    description: "Version record for a posted customer packing slip; captures quantity and volume/weight per delivery version so reprints and corrections show what was shipped when.",
+    module: "Accounts Receivable",
+    fields: [
+      {
+        name: "CustPackingSlipJour",
+        type: "Int64",
+        fkTarget: "CustPackingSlipJour.RecId",
+        note: "The packing slip header this version belongs to.",
+      },
+      {
+        name: "InternalPackingSlipId",
+        type: "String",
+        note: "Internal packing slip identifier for the version.",
+      },
+      {
+        name: "ParmId",
+        type: "String",
+        note: "Posting parameter set that produced this version.",
+      },
+      {
+        name: "AccountingDate",
+        type: "Date",
+        note: "Accounting date used by the posting that created the version.",
+      },
+      {
+        name: "Qty",
+        type: "Real",
+        note: "Quantity covered by this version.",
+      },
+      {
+        name: "VersionDateTime",
+        type: "UtcDateTime",
+        note: "When this version was created.",
+      },
+    ],
+  },
+  CustConfirmSalesLink: {
+    name: "CustConfirmSalesLink",
+    description: "Link between a posted sales order confirmation and the sales order lines it was created from; lets a confirmation be traced back to its order.",
+    module: "Accounts Receivable",
+    fields: [
+      {
+        name: "confirmId",
+        type: "String",
+        fkTarget: "CustConfirmJour.ConfirmId",
+        note: "Confirmation document number.",
+      },
+      {
+        name: "confirmDate",
+        type: "Date",
+        note: "Confirmation date.",
+      },
+      {
+        name: "salesId",
+        type: "String",
+        fkTarget: "SalesTable.SalesId",
+        note: "Sales order the confirmation was posted from.",
+      },
+      {
+        name: "origSalesId",
+        type: "String",
+        note: "Original order id when the confirmation came from a copy or intercompany chain.",
+      },
+      {
+        name: "parmId",
+        type: "String",
+        note: "Posting parameter set that produced the confirmation.",
+      },
+      {
+        name: "orderAccount",
+        type: "String",
+        fkTarget: "CustTable.AccountNum",
+        note: "Ordering customer account.",
+      },
+    ],
+  },
+
   SalesTable: {
     name: "SalesTable",
     description: "Sales order header governing the full lifecycle of a customer order from creation through invoicing.",
